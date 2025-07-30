@@ -1,31 +1,36 @@
-﻿using System.Runtime.InteropServices;
-using UnityEngine;
-using System.Collections;
+﻿using System;
 using System.Collections.Generic;
-using Uduino;
-using System;
-using UnityEngine.SceneManagement;
 using System.IO;
+using System.Runtime.InteropServices;
 using MotionSystems;
-using WaypointsFree;
-//using static Unity.Mathematics;
+using Uduino;
+using UnityEngine;
+using UnityEngine.SceneManagement;
 
-public class GameControllerScript : MonoBehaviour
-{
+public class GameControllerScript : MonoBehaviour {
+
+    public enum InputMode { Microcontroller, Gamepad }
+
+    [Header("Input Mode Settings")]
+    [Tooltip("Select the active input mode.")]
+    public InputMode currentInputMode = InputMode.Microcontroller;
+
+    public enum VisualTiltingMode { Disabled, Enabled }
+
+    [Header("Camera Tilt Mode Settings")]
+    [Tooltip("Select the camera tilt mode.")]
+    public VisualTiltingMode currentVisualTiltingMode = VisualTiltingMode.Disabled;
+
+    public enum PlatformRollAndPitchMode { Disabled, Enabled }
+
+    [Header("Platform Mode Settings")]
+    [Tooltip("Select the platform mode.")]
+    public PlatformRollAndPitchMode currentPlatformRollAndPitchMode = PlatformRollAndPitchMode.Disabled;
+
+
     #region EternityBike-Modes
 
     public GameObject selectedCondition;
-
-    public enum RealismSupportLevel { OptimizedSupport, NoSupport, FullSupport };
-    public RealismSupportLevel currentRealismSupportLevel;
-
-    public enum VisualTiltingMode
-    {
-        Disabled,
-        SynchronisedTilting,
-        TestMode
-    }
-    public VisualTiltingMode currentVisualTiltingMode;
 
     public enum UserBikeStopMode { AutoStop, ManuStop };   // different stop modes for eternity bike, AutoStop for cruise control and ManuStop for baseline mode
     public UserBikeStopMode currentStopMode;
@@ -51,6 +56,8 @@ public class GameControllerScript : MonoBehaviour
             PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
             0, 30)
     };
+
+
     public int activeCalculationModelIndex = 0;
 
     public bool controller_mode = true;
@@ -58,14 +65,7 @@ public class GameControllerScript : MonoBehaviour
     public DetectMinMaxLineCollision_version2 detectMinMaxLine;
     #endregion
 
-    #region Physical-Parameters
-    public float SteeringAngle = 0.0f;
-
-    public float BikeSpeed = 0f;
-    public float ISteeringAngle = 0f;
-
-    public const float GRAVITATIONAL_ACCELERATION = 9.81f;
-    public float ICurveRadius = 0.0f;
+    public const float GRAVITATIONAL_ACCELERATION = 9.81f
     public float supportedAngle = 40.0f;
     public float Sign = 0.0f;
     public float supportFactor = 0.0f;
@@ -76,7 +76,7 @@ public class GameControllerScript : MonoBehaviour
     public float visualTiltMultiplier = 1.0f;
     [Range(0.5f, 2f)]
     public float visualTiltSpeed = 1.0f;
-    #endregion
+#endregion
 
     #region GameObjects
     private GameObject Bicycle = null;
@@ -90,13 +90,6 @@ public class GameControllerScript : MonoBehaviour
     public int level = 0;
     private const int max_levels = 6;
 
-    #endregion
-
-    #region Logger
-    public bool activateCalculationLogging = false;
-    float elapsed = 0f;
-    bool recording = false;
-    public Logger logger = new Logger();
     #endregion
 
     #region FSMI-Parameters
@@ -182,77 +175,60 @@ public class GameControllerScript : MonoBehaviour
 
     #endregion
 
-    void Start()
-    {
+    void Start() {
         ApplySelectedCondition();
         setCalculationModel();
         setUduinoEvent();
         setRealismSupportLevel();
         setFSMI();
-        setGameObjects();
     }
 
-    private void ApplySelectedCondition()
-    {
+    private void ApplySelectedCondition() {
         GameObject bike = GameObject.Find("EternityBike");
 
-        if (bike == null || selectedCondition == null)
-        {
+        if (bike == null || selectedCondition == null) {
             Debug.LogError("Bike or selected condition not found.");
             return;
         }
 
         var def = selectedCondition.GetComponent<ConditionDefinition>();
 
-        if (def != null)
-        {
+        if (def != null) {
             def.ApplyToBike(bike, this);
             Debug.Log("[Condition] Loaded: " + selectedCondition.name);
-        }
-        else
-        {
+        } else {
             Debug.LogWarning("No ConditionDefinition found on selected object.");
         }
     }
 
-    private void setCalculationModel()
-    {
+    private void setCalculationModel() {
         //@levent here, it's ugly i know... i will think of something better...
         activeCalculationModelIndex = 0;
         ((RealismPlatformCalculationModel)calculationModelRegistry[activeCalculationModelIndex]).setPlatform(this);
         calculationModelRegistry[activeCalculationModelIndex].setLogCalculations(activateCalculationLogging);
     }
-    private void setRealismSupportLevel()
-    {
-        if (currentRealismSupportLevel == RealismSupportLevel.OptimizedSupport)
-        {
+    private void setRealismSupportLevel() {
+        if (currentRealismSupportLevel == RealismSupportLevel.OptimizedSupport) {
             speedCalculationMultiplier = 0.6f;
             speedCalculationExponent = 1.7f;
             RollMultiplier = custom_rollMultipliers[custom_rollMultiplierInd];
-        }
-        else if (currentRealismSupportLevel == RealismSupportLevel.FullSupport)
-        {
+        } else if (currentRealismSupportLevel == RealismSupportLevel.FullSupport) {
             speedCalculationMultiplier = 1.0f;
             speedCalculationExponent = 2.0f;
             RollMultiplier = custom_rollMultipliers[custom_rollMultiplierInd];
-        }
-        else if (currentRealismSupportLevel == RealismSupportLevel.NoSupport)
-        {
+        } else if (currentRealismSupportLevel == RealismSupportLevel.NoSupport) {
             RollMultiplier = 0;
         }
     }
-    private void setUduinoEvent()
-    {
+    private void setUduinoEvent() {
         UduinoManager.Instance.OnDataReceived += UpdateEternityBikeData;
     }
 
     /*Load ForceSeatMI library from ForceSeatPM installation directory */
-    private void setFSMI()
-    {
+    private void setFSMI() {
         m_fsmi = new ForceSeatMI();
 
-        if (m_fsmi.IsLoaded())
-        {
+        if (m_fsmi.IsLoaded()) {
             // Find platform's components
             m_shaft = GameObject.Find("Shaft");
             m_board = GameObject.Find("Board");
@@ -274,49 +250,12 @@ public class GameControllerScript : MonoBehaviour
             m_fsmi.BeginMotionControl();
 
             SendDataToFSMIPlatform();
-        }
-        else
-        {
+        } else {
             Debug.LogError("ForceSeatMI library has not been found! Please install ForceSeatPM.");
         }
     }
-    /** TODO Check if needed*/
-    private void setGameObjects()
-    {
-        /* 
-        //unused in current project
-        {
-            var routesRoot = GameObject.Find("Routes");
 
-            var tmp = routesRoot.GetComponentsInChildren<Transform>(true);
-            var tmpRoutes = new List<Transform>();
-            for (int i = 0; i < tmp.Length; ++i)
-            {
-                var cur = tmp[i];
-                if (cur.parent.gameObject == routesRoot)
-                {
-                    tmpRoutes.Add(cur);
-                    cur.gameObject.SetActiveRecursively(false);
-                }
-            }
-            this.routes = tmpRoutes.ToArray();
-
-            Debug.Log("ROUTES LEN " + this.routes.Length);
-        }
-        {
-            var spawns = GameObject.Find("Spawns");
-            var tmp = spawns.GetComponentsInChildren<Transform>(true);
-            spawnPoints = new Transform[tmp.Length - 1];
-            for (int i = 1; i < tmp.Length; ++i)
-            {
-                spawnPoints[i - 1] = tmp[i];
-            }
-        }
-        */
-        var bike = GameObject.Find("EternityBike");
-    }
-    void loadLevel(int ind)
-    {
+    void loadLevel(int ind) {
         currentRoute = ind;
         currentSpawnPoint = ind;
 
@@ -331,33 +270,22 @@ public class GameControllerScript : MonoBehaviour
         Debug.Log("Level Loaded " + ind);
     }
 
-    void Update()
-    {
-        if (logger.isActive())
-        {
-            elapsed += Time.deltaTime;
-        }
-
-        updateFSMI();
-        handleInput();
+    void Update() {
+        HandleInputs();
     }
-    void FixedUpdate()
-    {
+    void FixedUpdate() {
         // Update values in order to received user's input
         UpdateValue(ref m_pitch, Input.GetAxis("Vertical"), DRAWING_PITCH_STEP, -DRAWING_PITCH_MAX, DRAWING_PITCH_MAX);
         UpdateValue(ref m_roll, SteeringAngle, DRAWING_ROLL_STEP, -DRAWING_ROLL_MAX, DRAWING_ROLL_MAX);
         UpdateValue(ref m_heave, Input.GetKey(KeyCode.Space) ? 1 : 0, DRAWING_HEAVE_STEP, 0, DRAWING_HEAVE_MAX);
     }
 
-    private void handleInput()
-    {
-        if (Input.GetKeyDown("r"))
-        {
+    private void HandleInputs() {
+        if (Input.GetKeyDown("r")) {
             SceneManager.LoadScene("BikeSimulator"); //Load Main Scene
             Debug.Log("Reset Scene");
         }
-        if (Input.GetKeyDown("p"))
-        {
+        if (Input.GetKeyDown("p")) {
             Bicycle = GameObject.Find("EternityBike");
             var spawnpoint = spawnPoints[currentSpawnPoint];
             currentSpawnPoint = (currentSpawnPoint + 1) % spawnPoints.Length;
@@ -368,181 +296,79 @@ public class GameControllerScript : MonoBehaviour
             //Bicycle.transform.position = new Vector3(-360, 0.09f, 430);
             Debug.Log("Load Parking lot"); //TODO Check if still acurate
         }
-        if (Input.GetKeyDown("l"))
-        {
+        if (Input.GetKeyDown("l")) {
             for (int i = 0; i < routes.Length; ++i) routes[i].gameObject.SetActiveRecursively(false);
             routes[currentRoute].gameObject.SetActiveRecursively(true);
             currentRoute = (currentRoute + 1) % routes.Length;
         }
-        if (Input.GetKeyDown("n"))
-        {
+        if (Input.GetKeyDown("n")) {
             currentRealismSupportLevel = RealismSupportLevel.NoSupport;
             setRealismSupportLevel();
             Debug.Log("Changed Support Level to: No Support");
         }
-        if (Input.GetKeyDown("f"))
-        {
+        if (Input.GetKeyDown("f")) {
             currentRealismSupportLevel = RealismSupportLevel.FullSupport;
             setRealismSupportLevel();
             Debug.Log("Changed Support Level to: Full Support");
         }
-        if (Input.GetKeyDown("o"))
-        {
+        if (Input.GetKeyDown("o")) {
             currentRealismSupportLevel = RealismSupportLevel.OptimizedSupport;
             setRealismSupportLevel();
             Debug.Log("Changed Support Level to: Optimized Support");
         }
-        if (Input.GetKeyDown("t"))
-        {
+        if (Input.GetKeyDown("t")) {
             activeCalculationModelIndex = (activeCalculationModelIndex + 1) % calculationModelRegistry.Length;
             Debug.Log("New Active Calculation-Model: " + calculationModelRegistry[activeCalculationModelIndex].getLabel());
         }
-        if (Input.GetKeyDown("x"))
-        {
+        if (Input.GetKeyDown("x")) {
             Bicycle = GameObject.Find("EternityBike");
             Bicycle.transform.position = new Vector3(0f, 0.1f, 0f);
             Debug.Log("Load New Level"); //TODO Check Function
         }
-        if (Input.GetKeyDown("c"))
-        {
+        if (Input.GetKeyDown("c")) {
             controller_mode = !controller_mode;
             Debug.Log("Controller Mode " + controller_mode);
         }
-        if (Input.GetKeyDown("i"))
-        {
+        if (Input.GetKeyDown("i")) {
             loadLevel(level);
             level = (level + 1) % max_levels;
         }
-        if (Input.GetKeyDown("z"))
-        {
+        if (Input.GetKeyDown("z")) {
             logger.setActive(!logger.isActive(), this);
             elapsed = 0;
         }
-        if (OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger) > 0)
-        {
-           //TODO Quick Fix for brakes
+        if (OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger) > 0) {
+            //TODO Quick Fix for brakes
             Debug.Log("Secondary Trigger: " + OVRInput.Axis1D.SecondaryIndexTrigger.ToString());
         }
-        if(OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick) != null)
-        {
+        if (OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick) != null) {
             //Keeps left Controller acitve
         }
     }
 
-    private void updateFSMI()
-    {
-        if (m_fsmi != null && m_fsmi.IsLoaded())
-        {
-            // Set back origin position and then modify it
-            m_shaft.transform.position = m_originPosition;
-            m_shaft.transform.Translate(0, m_heave, 0);
-
-            // Set back origin rotation and then modify it
-            m_board.transform.eulerAngles = m_originRotation;
-            m_board.transform.Rotate(m_pitch, 0, -m_roll);
-
-            SendDataToFSMIPlatform();
-        }
-    }
-
-    private void UpdateValue(ref float value, float input, float step, float min, float max)
-    {
-        if (0 < input)
-        {
+    private void UpdateValue(ref float value, float input, float step, float min, float max) {
+        if (0 < input) {
             value = Mathf.Clamp(value + step, min, max);
-        }
-        else if (0 > input)
-        {
+        } else if (0 > input) {
             value = Mathf.Clamp(value - step, min, max);
-        }
-        else if (value > 0)
-        {
+        } else if (value > 0) {
             value = Mathf.Clamp(value - step, 0, max);
-        }
-        else if (value < 0)
-        {
+        } else if (value < 0) {
             value = Mathf.Clamp(value + step, min, 0);
         }
     }
 
-    /*here control the baseline stop and cruise control stop of user bike*/
-    void OnTriggerEnter(Collider other)
-    {
-        if (currentStopMode == UserBikeStopMode.AutoStop && other.tag.Equals("pedestrain"))
-        {
-            UBikeStop();
-        }
-
-        else if (currentStopMode == UserBikeStopMode.ManuStop && other.tag.Equals("pedestrain") && appliedBrakeForce != 0)
-        {
-            UBikeStop();
-        }
-    }
-
-    public void UBikeStop()
-    {
-        BikeSpeed = 0;
-
-        Debug.Log("The EternityBike is stopped!");
-    }
-
-    void OnDestroy()
-    {
-        if (m_fsmi.IsLoaded())
-        {
-            m_fsmi.EndMotionControl();
-            m_fsmi.Dispose();
-        }
-    }
-
-    private void SaveOriginPosition()
-    {
-        // Save origin position of the platform's shaft
-        var x = m_shaft.transform.position.x;
-        var y = m_shaft.transform.position.y;
-        var z = m_shaft.transform.position.z;
-
-        m_originPosition = new Vector3(x, y, z);
-    }
-
-    private void SaveOriginRotation()
-    {
-        // Save origin rotation of the platform's board
-        var x = m_board.transform.eulerAngles.x;
-        var y = m_board.transform.eulerAngles.y;
-        var z = m_board.transform.eulerAngles.z;
-
-        m_originRotation = new Vector3(x, y, z);
-    }
-
-    private void SendDataToFSMIPlatform()
-    {
-        // Convert parameters to logical units
-        m_platformPosition.state = FSMI_State.NO_PAUSE;
-        
-        m_platformPosition.pitch = (short)Mathf.Clamp(PitchPosition, PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX);
-        m_platformPosition.roll = (short)Mathf.Clamp(RollPosition * RollMultiplier, PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX);
-        m_platformPosition.heave = (short)Mathf.Clamp(m_heave / DRAWING_HEAVE_MAX * PLATFORM_POSITION_LOGIC_MAX, PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX);
-
-        // Send data to platform
-        m_fsmi.SendTopTablePosLog(ref m_platformPosition);
-    }
-   
-    void UpdateEternityBikeData(string data, UduinoDevice device)
-    {
+    void UpdateEternityBikeData(string data, UduinoDevice device) {
         if (device.name.Equals("IndoorBikeData")) {
             Bicycle = GameObject.Find("EternityBike");
             string[] values = data.Split(','); // [Speed0, processedSteeringAngle, ForntBreakForche, RearBrakeForce, CombineBreakForce, Resistance]
 
             //READ AND VALIDATE INPUT
             float Velocity = 0;
-            if (controller_mode)
-            {
+            if (controller_mode) {
                 float vertical = Input.GetAxis("Vertical");
                 Velocity = vertical * 20;
-            }
-            else
-            {
+            } else {
                 //Test from sonja 09.01.22
                 int i;
                 if (int.TryParse(values[0].Substring(0, 1), out i)) {
@@ -554,26 +380,20 @@ public class GameControllerScript : MonoBehaviour
             BikeSpeed = Velocity;
 
             float iSteeringAngle = 0;
-            if (controller_mode)
-            {
+            if (controller_mode) {
                 float vertical = Input.GetAxis("Horizontal");
                 iSteeringAngle = Math.Max(Math.Min(vertical, 1.0f), -1.0f) * 180;
-            }
-            else
-            {
-                iSteeringAngle = BikeControllerScript.steeringAngle; // -90, 0, +90
+            } else {
+                iSteeringAngle = BikeController.steeringAngle; // -90, 0, +90
             }
 
             if (values.Length > 1) {
 
-                if (iSteeringAngle < 0)
-                {
- 
+                if (iSteeringAngle < 0) {
+
                     Sign = -1;
 
-                }
-                else
-                {
+                } else {
                     Sign = 1;
                 }
 
@@ -584,30 +404,21 @@ public class GameControllerScript : MonoBehaviour
                 SteeringAngle = iSteeringAngle.Remap(90, -90, 1.0f, -1.0f);
                 SteeringAngle = (float)Math.Round(SteeringAngle * 100f) / 100f;
 
-                if (logger.isActive() && elapsed > logger.frequency)
-                {
-                    logger.log(this, elapsed, Velocity);
-                    elapsed = 0;
-                }
-
                 //Debug.Log("Steering ANGLE == " + SteeringAngle + " IST " + ISteeringAngle);
                 //Debug.Log("Velocity: " + Velocity + " SteeringAngle: " + iSteeringAngle + " SteeringAngle: " + SteeringAngle);
 
                 //TODO FIX BRAKES
                 float FrontBrakeForce = float.Parse(values[2]);
                 float RearBrakeForce = float.Parse(values[3]);
-;
+                ;
                 float CombinedBrakeForce;
-                 if (controller_mode)
-                 {
-                     var hor2 = Input.GetAxis("Horizontal2");
-                     CombinedBrakeForce = hor2 * 200;
-                     if (CombinedBrakeForce < 0) CombinedBrakeForce *= -1;
-                 }
-                 else
-                 {
-                     CombinedBrakeForce = float.Parse(values[4]);
-                 }
+                if (controller_mode) {
+                    var hor2 = Input.GetAxis("Horizontal2");
+                    CombinedBrakeForce = hor2 * 200;
+                    if (CombinedBrakeForce < 0) CombinedBrakeForce *= -1;
+                } else {
+                    CombinedBrakeForce = float.Parse(values[4]);
+                }
 
                 float Resistance = float.Parse(values[5]);
 
@@ -620,78 +431,16 @@ public class GameControllerScript : MonoBehaviour
 
                 //Debug.LogError("Velocity: " + Velocity + " SteeringAngle: " + iSteeringAngle + " SteeringAngle: " + SteeringAngle + " FrontBrakeForce: " + FrontBrakeForce + " RearBrakeForce: " + RearBrakeForce + " CombinedBrakeForce: " + CombinedBrakeForce + " Resistance: " + Resistance);
 
-                if (logger.isActive() && elapsed > logger.frequency)
-                {
+                if (logger.isActive() && elapsed > logger.frequency) {
                     logger.log(this, elapsed, Velocity, PitchPosition, RollPosition, appliedBrakeForce, Resistance);
                     elapsed = 0;
                 }
             }
         }
     }
-
 }
 
-public static class ExtensionMethods
-{
-    public static float Remap(this float value, float from1, float to1, float from2, float to2)
-    {
-        return (value - from1) / (to1 - from1) * (to2 - from2) + from2;
-    }
-}
-
-public class Logger
-{
-    const string filename = "C:\\Users\\Bikelab\\Desktop\\MYLOG.txt";
-
-    private bool active = false;
-    public float frequency = 0.1f;
-
-    public Logger() { }
-
-    public void setActive(bool active, GameControllerScript platform)
-    {
-        this.active = active;
-        List<string> lines = new List<string> { };
-        if (this.active)
-        {
-            lines.Add("");
-            lines.Add("Recording Started;" + DateTime.Now);
-            lines.Add("Configurations");
-            lines.Add("Controller Mode;" + platform.controller_mode);
-            lines.Add("Selected Level;" + platform.level);
-
-            Debug.Log("LOGGER ACTIVATED");
-        }
-        else
-        {
-            lines.Add("Recording Ended;" + DateTime.Now);
-            Debug.Log("LOGGER DEACTIVATED");
-        }
-        File.AppendAllLines(filename, lines);
-    }
-
-    public void log(GameControllerScript platform, float elapsedTime, float velocity)
-    {
-        List<string> lines = new List<string> { };
-        lines.Add("ElapsedTime;" + elapsedTime + ";Velocity;" + velocity);
-        File.AppendAllLines(filename, lines);
-    }
-
-    public void log(GameControllerScript platform, float elapsedTime, float velocity, float rollposition, float pitchposition, float combinedBrakeforce, float Resistance)
-    {
-        List<string> lines = new List<string> { };
-        lines.Add("ElapsedTime;" + elapsedTime + ";Velocity;" + velocity + ";Rollposition;" + rollposition + ";Pitchposition;" + pitchposition + ";Combined Brakeforce;" + combinedBrakeforce + ";Resistance;" + Resistance);
-        File.AppendAllLines(filename, lines);
-    }
-
-    public bool isActive()
-    {
-        return this.active;
-    }
-}
-
-public abstract class AbstractPlatformCalculationModel
-{
+public abstract class AbstractPlatformCalculationModel {
     private readonly float minTilt;
     private readonly float maxTilt;
 
@@ -710,8 +459,7 @@ public abstract class AbstractPlatformCalculationModel
         float maxPitch,
         float minBrakeForce,
         float maxBrakeForce
-        )
-    {
+        ) {
         this.minTilt = minTilt;
         this.maxTilt = maxTilt;
         this.minPitch = minPitch;
@@ -722,15 +470,13 @@ public abstract class AbstractPlatformCalculationModel
 
     public abstract String getLabel();
 
-    public void setLogCalculations(bool active)
-    {
+    public void setLogCalculations(bool active) {
         this.logCalculations = active;
     }
 
     public delegate float Calculation();
 
-    public static float getResultWithinRange(float min, float max, Calculation calculation)
-    {
+    public static float getResultWithinRange(float min, float max, Calculation calculation) {
         float ret = calculation.Invoke();
 
         ret = Math.Min(ret, max);
@@ -739,11 +485,9 @@ public abstract class AbstractPlatformCalculationModel
         return ret;
     }
 
-    public float calculateTilt(float velocity, float steeringAngle)
-    {
+    public float calculateTilt(float velocity, float steeringAngle) {
         float ret = getResultWithinRange(minTilt, maxTilt, () => calculateTilt2(velocity, steeringAngle));
-        if (logCalculations)
-        {
+        if (logCalculations) {
             Debug.Log("[I] Calculated Tilt: " + ret);
         }
         return ret;
@@ -751,11 +495,9 @@ public abstract class AbstractPlatformCalculationModel
 
     protected abstract float calculateTilt2(float velocity, float steeringAngle);
 
-    public float calculatePitch(Vector3 bikeForward, float brakeForce)
-    {
+    public float calculatePitch(Vector3 bikeForward, float brakeForce) {
         var ret = getResultWithinRange(minPitch, maxPitch, () => calculatePitch2(bikeForward, brakeForce));
-        if(logCalculations)
-        {
+        if (logCalculations) {
             Debug.Log("[I] Calculated Pitch: " + ret);
         }
         return ret;
@@ -763,11 +505,9 @@ public abstract class AbstractPlatformCalculationModel
 
     protected abstract float calculatePitch2(Vector3 bikeForward, float brakeForce);
 
-    public float calculateBreakForce(float bikeSpeed, float combinedBrakeForce)
-    {
+    public float calculateBreakForce(float bikeSpeed, float combinedBrakeForce) {
         var ret = getResultWithinRange(minBrakeForce, maxBrakeForce, () => calculateBreakForce2(bikeSpeed, combinedBrakeForce));
-        if (logCalculations)
-        {
+        if (logCalculations) {
             Debug.LogWarning("[I] Calculated Brakeforce: " + ret);
         }
         return ret;
@@ -775,36 +515,31 @@ public abstract class AbstractPlatformCalculationModel
     protected abstract float calculateBreakForce2(float bikeSpeed, float combinedBrakeForce);
 }
 
-public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationModel
-{
-   GameControllerScript platform;
-    
+public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationModel {
+    GameControllerScript platform;
+
     public RealismPlatformCalculationModel(float minTilt,
         float maxTilt,
         float minPitch,
         float maxPitch,
         float minBrakeForce,
         float maxBrakeForce
-        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce)
-    {
+        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce) {
         this.platform = null;
     }
 
-    public void setPlatform(GameControllerScript platform)
-    {
+    public void setPlatform(GameControllerScript platform) {
         this.platform = platform;
     }
 
-    public override string getLabel()
-    {
+    public override string getLabel() {
         return "Realism";
     }
 
     /**
      * TODO: @levent fix ugly references to platform...
      */
-    protected override float calculateTilt2(float velocity, float steeringAngle)
-    {
+    protected override float calculateTilt2(float velocity, float steeringAngle) {
         float Range = GameControllerScript.PLATFORM_POSITION_LOGIC_MAX / (this.platform.supportedAngle * 1000);
 
         float speedInMS = this.platform.BikeSpeed / 3.6f;
@@ -813,8 +548,7 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
 
         this.platform.supportFactor = 90 / this.platform.supportedAngle;
 
-        if (this.platform.calculatedTiltAngle >= this.platform.supportedAngle)
-        {
+        if (this.platform.calculatedTiltAngle >= this.platform.supportedAngle) {
             this.platform.calculatedTiltAngle = this.platform.supportedAngle;
         }
 
@@ -826,29 +560,22 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
 
         //ITiltAngle = realisticITiltAngleFactor * RollPosition / PLATFORM_POSITION_LOGIC_MAX;
         //ITiltAngle = calculatedTiltAngle;
-        if(platform.activateCalculationLogging)
-        {
+        if (platform.activateCalculationLogging) {
             Debug.Log("[I] ITiltAngle before Support: " + this.platform.ITiltAngle);
         }
-        
+
 
         this.platform.ITiltAngleMax = this.platform.ITiltAngle;
 
-        if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.OptimizedSupport)
-        {
+        if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.OptimizedSupport) {
             this.platform.ITiltAngle = this.platform.calculatedTiltAngle * this.platform.Sign / this.platform.optimizedITiltAngleFactor;
-        }
-        else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.FullSupport)
-        {
+        } else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.FullSupport) {
             this.platform.ITiltAngle = (float)Math.Truncate(this.platform.calculatedTiltAngle * this.platform.Sign);
-        }
-        else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.NoSupport)
-        {
+        } else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.NoSupport) {
             this.platform.ITiltAngle = 0;
         }
 
-        if (platform.activateCalculationLogging)
-        {
+        if (platform.activateCalculationLogging) {
             Debug.Log("[I] ITiltAngle after Support: " + this.platform.ITiltAngle);
         }
 
@@ -856,68 +583,49 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
     }
 }
 
-public class ApproximatedPlatformCalculationModel : AbstractPlatformCalculationModel
-{
+public class ApproximatedPlatformCalculationModel : AbstractPlatformCalculationModel {
     public ApproximatedPlatformCalculationModel(float minTilt,
         float maxTilt,
         float minPitch,
         float maxPitch,
         float minBrakeForce,
         float maxBrakeForce
-        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce)
-    {
+        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce) {
     }
 
-    public override string getLabel()
-    {
+    public override string getLabel() {
         return "Approximated";
     }
 
     private const float tiltMultiplicator = 4000;
 
-    protected override float calculateTilt2(float velocity, float steeringAngle)
-    {
+    protected override float calculateTilt2(float velocity, float steeringAngle) {
         float toApply = velocity * steeringAngle * tiltMultiplicator;
 
-        if (velocity > 10)
-        {
+        if (velocity > 10) {
             //alles gut
-        }
-        else if (velocity > 6)
-        {
+        } else if (velocity > 6) {
             toApply *= 0.6f;
-        }
-        else if (velocity > 4)
-        {
+        } else if (velocity > 4) {
             toApply *= 0.4f;
-        }
-        else if (velocity > 2)
-        {
+        } else if (velocity > 2) {
             toApply *= 0.2f;
-        }
-        else
-        {
+        } else {
             toApply = 0f;
         }
         return toApply;
     }
 
-    protected override float calculateBreakForce2(float bikeSpeed, float combinedBrakeForce)
-    {
+    protected override float calculateBreakForce2(float bikeSpeed, float combinedBrakeForce) {
         float applyBrakeForce = 0;
-        if (combinedBrakeForce < 2)
-        {
-            if(logCalculations)
-            {
+        if (combinedBrakeForce < 2) {
+            if (logCalculations) {
                 Debug.Log("[I] Ignore BrakeForce: " + combinedBrakeForce);
             }
-        }
-        else
-        {
+        } else {
             applyBrakeForce = combinedBrakeForce;
             //Break Force should never be negative, but just in case
-            if (applyBrakeForce < 0)
-            {
+            if (applyBrakeForce < 0) {
                 applyBrakeForce = 0;
             }
         }
@@ -928,8 +636,7 @@ public class ApproximatedPlatformCalculationModel : AbstractPlatformCalculationM
     private const float pitchDeadzone = 1.0f;
     private const float pitchMultiplier = 600.0f;
 
-    protected override float calculatePitch2(Vector3 bikeForward, float brakeForce)
-    {
+    protected override float calculatePitch2(Vector3 bikeForward, float brakeForce) {
         float angle = Vector3.Angle(bikeForward, Vector3.up);
 
         //Debug.Log("pitch angle: " + angle);
@@ -951,48 +658,40 @@ public class ApproximatedPlatformCalculationModel : AbstractPlatformCalculationM
     }
 }
 
-public class NoTiltPlatformCalculationModel : ApproximatedPlatformCalculationModel
-{
+public class NoTiltPlatformCalculationModel : ApproximatedPlatformCalculationModel {
     public NoTiltPlatformCalculationModel(float minTilt,
         float maxTilt,
         float minPitch,
         float maxPitch,
         float minBrakeForce,
         float maxBrakeForce
-        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce)
-    {
+        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce) {
     }
 
-    public override string getLabel()
-    {
+    public override string getLabel() {
         return "No Tilt";
     }
 
-    protected override float calculateTilt2(float velocity, float steeringAngle)
-    {
+    protected override float calculateTilt2(float velocity, float steeringAngle) {
         return 0;
     }
 }
 
-public class NoTiltAndNoPitchPlatformCalculationModel : NoTiltPlatformCalculationModel
-{
+public class NoTiltAndNoPitchPlatformCalculationModel : NoTiltPlatformCalculationModel {
     public NoTiltAndNoPitchPlatformCalculationModel(float minTilt,
         float maxTilt,
         float minPitch,
         float maxPitch,
         float minBrakeForce,
         float maxBrakeForce
-        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce)
-    {
+        ) : base(minTilt, maxTilt, minPitch, maxPitch, minBrakeForce, maxBrakeForce) {
     }
 
-    public override string getLabel()
-    {
+    public override string getLabel() {
         return "No Tilt & No Pitch";
     }
 
-    protected override float calculatePitch2(Vector3 bikeForward, float brakeForce)
-    {
+    protected override float calculatePitch2(Vector3 bikeForward, float brakeForce) {
         return 0;
     }
 }
