@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class GamepadInputProvider : MonoBehaviour, IInputProvider
+public class GamepadInputProvider : MonoBehaviour, IBikeInputProvider
 {
     public float gamepadSteeringSensitivity = 45f;
     public float gamepadAccelerationSensitivity = 1f;

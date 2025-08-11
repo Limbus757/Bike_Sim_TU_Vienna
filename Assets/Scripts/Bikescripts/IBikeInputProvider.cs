@@ -2,7 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public interface IInputProvider
+public interface IBikeInputProvider
 {
     // Gets the current steering angle input.
     float GetSteeringAngle();

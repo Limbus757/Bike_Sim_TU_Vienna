@@ -21,7 +21,7 @@ public class GameControllerScript : MonoBehaviour {
     [Tooltip("Select the camera tilt mode.")]
     public VisualTiltingMode currentVisualTiltingMode = VisualTiltingMode.Disabled;
 
-    public enum PlatformRollAndPitchMode { Disabled, Enabled }
+    public enum PlatformRollAndPitchMode { Disabled, Enabled, NoTilt, NoPitch }
 
     [Header("Platform Mode Settings")]
     [Tooltip("Select the platform mode.")]
@@ -253,21 +253,6 @@ public class GameControllerScript : MonoBehaviour {
         } else {
             Debug.LogError("ForceSeatMI library has not been found! Please install ForceSeatPM.");
         }
-    }
-
-    void loadLevel(int ind) {
-        currentRoute = ind;
-        currentSpawnPoint = ind;
-
-        for (int i = 0; i < routes.Length; ++i) routes[i].gameObject.SetActiveRecursively(false);
-        routes[currentRoute].gameObject.SetActiveRecursively(true);
-
-
-        var spawnpoint = spawnPoints[currentSpawnPoint];
-
-        Bicycle.transform.position = spawnpoint.position;
-        Bicycle.transform.rotation = spawnpoint.rotation;
-        Debug.Log("Level Loaded " + ind);
     }
 
     void Update() {
