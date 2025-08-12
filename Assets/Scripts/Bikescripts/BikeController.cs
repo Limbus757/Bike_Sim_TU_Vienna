@@ -11,8 +11,8 @@ public class BikeController : MonoBehaviour {
     public float tiltAngle { get; private set; }
     public float rollPosition { get; private set; }
     public float pitchPosition { get; private set; }
-    public float frontBrakeForce { get; private set; }
-    public float backBrakeForce { get; private set; }
+    public float frontBrakeforce { get; private set; }
+    public float backBrakeforce { get; private set; }
 
     // variables relevent to how the bike handles, need to be tuned
     private float accelerationMultiplier = 2.5f;
@@ -52,13 +52,11 @@ public class BikeController : MonoBehaviour {
             Debug.LogError("BikeController: MotionPlatformController not found in scene! Cannot send platform data.");
         }
 
-        handlebar = this.transform.Find("WheelHandleBar");
-
         // Initialize bike's internal state variables
         bikeSpeed = 0f;
         steeringAngle = 0f;
-        frontBrakeForce = 0f;
-        backBrakeForce = 0f;
+        frontBrakeforce = 0f;
+        backBrakeforce = 0f;
         pitchPosition = 0f;
         rollPosition = 0f;
     }
@@ -66,7 +64,7 @@ public class BikeController : MonoBehaviour {
     private void FetchInputProvider() {
         switch (gameControllerScript.currentInputMode) { 
         case GameControllerScript.InputMode.Microcontroller:
-            inputProvider = FindObjectOfType<BikeRigInputProvider>();
+            inputProvider = FindObjectOfType<PhysicalBikeInputProvider>();
             break;
         case GameControllerScript.InputMode.Gamepad:
             inputProvider = FindObjectOfType<GamepadInputProvider>();
@@ -84,14 +82,13 @@ public class BikeController : MonoBehaviour {
         ApplyBikeAcceleration(bikeRigidBody);
         MoveBikeAlongTurn();
         UpdateBikeTiltAndPitch();
-        ApplySteeringVisual();
     }
 
     private void FetchControlInputs() {
         steeringAngle = inputProvider.GetSteeringAngle();
         bikeSpeed = inputProvider.GetSpeed();
-        brakeforce = inputProvider.GetFrontBrakeForce();
-        brakeforce = inputProvider.GetBackBrakeForce();
+        frontBrakeforce = inputProvider.GetFrontBrakeForce();
+        backBrakeforce = inputProvider.GetBackBrakeForce();
     }
 
     private void ApplyBikeAcceleration(Rigidbody rigidBody) {
@@ -147,6 +144,8 @@ public class BikeController : MonoBehaviour {
     }
 
     private void UpdateBikeTiltAndPitch() {
+
+        #error  TODO REFINE CALULATIONS
         // Variables for calculations
         float tempTilt = 0;
         float tempPitch = 0;
@@ -156,7 +155,7 @@ public class BikeController : MonoBehaviour {
         // Pitch calculation using the Approximated model logic, as a default
         float pitchAngle = Vector3.Angle(transform.forward, Vector3.up);
         float calculatedPitch = (pitchAngle - 90) * 600f;
-        calculatedPitch += tempBrakeForce * 500;
+        //calculatedPitch += tempBrakeForce * 500;
 
         switch (gameControllerScript.currentPlatformRollAndPitchMode) {
             case GameControllerScript.PlatformRollAndPitchMode.Enabled:
@@ -189,14 +188,6 @@ public class BikeController : MonoBehaviour {
         // Apply the calculated values to the bike's properties
         rollPosition = tempTilt;
         pitchPosition = tempPitch;
-    }
-
-    private void ApplySteeringVisual() {
-        if (handlebar != null) {
-            handlebar.localEulerAngles = new Vector3(0.0f, steeringAngle, 0.0f);
-        } else {
-            Debug.LogWarning("ApplySteeringVisual: HandleBar GameObject not assigned or found.");
-        }
     }
 }
 
