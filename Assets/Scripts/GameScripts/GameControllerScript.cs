@@ -9,6 +9,7 @@ using UnityEngine.SceneManagement;
 
 public class GameControllerScript : MonoBehaviour {
 
+    #region Input-Control-Parameters
     public enum InputMode { Microcontroller, Gamepad }
 
     [Header("Input Mode Settings")]
@@ -27,68 +28,15 @@ public class GameControllerScript : MonoBehaviour {
     [Tooltip("Select the platform mode.")]
     public PlatformRollAndPitchMode currentPlatformRollAndPitchMode = PlatformRollAndPitchMode.Disabled;
 
-
-    #region EternityBike-Modes
-
-    public GameObject selectedCondition;
-
-    public enum UserBikeStopMode { AutoStop, ManuStop };   // different stop modes for eternity bike, AutoStop for cruise control and ManuStop for baseline mode
-    public UserBikeStopMode currentStopMode;
-
-    public AbstractPlatformCalculationModel[] calculationModelRegistry = new AbstractPlatformCalculationModel[] {
-        new RealismPlatformCalculationModel(
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            0, 30
-        ),
-        new ApproximatedPlatformCalculationModel(
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            0, 30
-        ),
-        new NoTiltPlatformCalculationModel(
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            0, 30
-        ),
-        new NoTiltAndNoPitchPlatformCalculationModel(
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            PLATFORM_POSITION_LOGIC_MIN, PLATFORM_POSITION_LOGIC_MAX,
-            0, 30)
-    };
-
-
-    public int activeCalculationModelIndex = 0;
-
-    public bool controller_mode = true;
-
-    public DetectMinMaxLineCollision_version2 detectMinMaxLine;
     #endregion
 
-    public const float GRAVITATIONAL_ACCELERATION = 9.81f
-    public float supportedAngle = 40.0f;
-    public float Sign = 0.0f;
-    public float supportFactor = 0.0f;
-    public float speedCalculationMultiplier = 0.6f;
-    public float speedCalculationExponent = 1.7f;
+    #region Course-Parameters
 
-    [Range(0f, 1f)]
-    public float visualTiltMultiplier = 1.0f;
-    [Range(0.5f, 2f)]
-    public float visualTiltSpeed = 1.0f;
-#endregion
+    public enum Spawnpoint {Course1, None}
 
-    #region GameObjects
-    private GameObject Bicycle = null;
-
-    private Transform[] routes = null;
-    private Transform[] spawnPoints = null;
-
-    private int currentRoute = 0;
-    private int currentSpawnPoint = 0;
-
-    public int level = 0;
-    private const int max_levels = 6;
+    [Header("Platform Mode Settings")]
+    [Tooltip("Select the StartingPoint.")]
+    public Spawnpoint currentSpawnpoint = Spawnpoint.Course1;
 
     #endregion
 
@@ -225,39 +173,11 @@ public class GameControllerScript : MonoBehaviour {
     }
 
     /*Load ForceSeatMI library from ForceSeatPM installation directory */
-    private void setFSMI() {
-        m_fsmi = new ForceSeatMI();
-
-        if (m_fsmi.IsLoaded()) {
-            // Find platform's components
-            m_shaft = GameObject.Find("Shaft");
-            m_board = GameObject.Find("Board");
-
-            SaveOriginPosition();
-            SaveOriginRotation();
-
-            // Prepare data structure by clearing it and setting correct size
-            m_platformPosition.mask = 0;
-            m_platformPosition.structSize = (byte)Marshal.SizeOf(m_platformPosition);
-
-            m_platformPosition.state = FSMI_State.NO_PAUSE;
-
-            // Set fields that can be changed by demo application
-            m_platformPosition.mask = FSMI_POS_BIT.STATE | FSMI_POS_BIT.POSITION;
-
-            m_fsmi.SetAppID(""); // If you have dedicated app id, remove ActivateProfile calls from your code
-            m_fsmi.ActivateProfile("SDK - Positioning");
-            m_fsmi.BeginMotionControl();
-
-            SendDataToFSMIPlatform();
-        } else {
-            Debug.LogError("ForceSeatMI library has not been found! Please install ForceSeatPM.");
-        }
-    }
 
     void Update() {
         HandleInputs();
     }
+
     void FixedUpdate() {
         // Update values in order to received user's input
         UpdateValue(ref m_pitch, Input.GetAxis("Vertical"), DRAWING_PITCH_STEP, -DRAWING_PITCH_MAX, DRAWING_PITCH_MAX);
