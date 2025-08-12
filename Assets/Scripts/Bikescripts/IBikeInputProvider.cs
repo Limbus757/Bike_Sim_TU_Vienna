@@ -8,10 +8,12 @@ public interface IBikeInputProvider
     float GetSteeringAngle();
 
     // Gets the current acceleration input.
-    float GetSpeedInput();
+    float GetSpeed();
 
-    // Gets the current brake force input.
-    float GetBrakeForce();
+    // Gets the current front brake force input.
+    float GetFrontBrakeForce();
+    // Gets the current front brake force input.
+    float GetBackBrakeForce();
 
     // Gets the current resistance input.
     float GetResistance();
