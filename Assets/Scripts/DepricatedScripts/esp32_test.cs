@@ -54,7 +54,7 @@ public class esp32_test : MonoBehaviour
 
     DateTime prevTime;
 
-    public GameControllerScript gameController;
+    public GameController gameController;
 
 
     public int physicalSwitch = 0;

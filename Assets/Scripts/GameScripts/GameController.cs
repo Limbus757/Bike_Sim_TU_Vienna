@@ -7,28 +7,7 @@ using Uduino;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
-public class GameControllerScript : MonoBehaviour {
-
-    #region Input-Control-Parameters
-    public enum InputMode { Microcontroller, Gamepad }
-
-    [Header("Input Mode Settings")]
-    [Tooltip("Select the active input mode.")]
-    public InputMode currentInputMode = InputMode.Microcontroller;
-
-    public enum VisualTiltingMode { Disabled, Enabled }
-
-    [Header("Camera Tilt Mode Settings")]
-    [Tooltip("Select the camera tilt mode.")]
-    public VisualTiltingMode currentVisualTiltingMode = VisualTiltingMode.Disabled;
-
-    public enum PlatformRollAndPitchMode { Disabled, Enabled, NoTilt, NoPitch }
-
-    [Header("Platform Mode Settings")]
-    [Tooltip("Select the platform mode.")]
-    public PlatformRollAndPitchMode currentPlatformRollAndPitchMode = PlatformRollAndPitchMode.Disabled;
-
-    #endregion
+public class GameController : MonoBehaviour {
 
     #region Course-Parameters
 
@@ -40,215 +19,19 @@ public class GameControllerScript : MonoBehaviour {
 
     #endregion
 
-    #region FSMI-Parameters
-
-    public float appliedBrakeForce = 0;
-    public float ITiltAngle = 0f;
-    public float ITiltAngleMax = 0f;
-    public float optimizedITiltAngleFactor = 100.00f;
-    public float calculatedTiltAngle = 0.0f;
-
-    public float RollMultiplier = 1f;
-    public float[] custom_rollMultipliers = { 0f, 0.25f, 0.5f, 0.75f, 1f };
-    public int custom_rollMultiplierInd = 4;
-
-    // Platform logical min/max coordinates
-    public const int PLATFORM_POSITION_LOGIC_MIN = -32767;
-    public const int PLATFORM_POSITION_LOGIC_MAX = 32767;
-    //public const int PLATFORM_POSITION_LOGIC_MIN = -16384;
-    //public const int PLATFORM_POSITION_LOGIC_MAX = 16384;
-
-    // Heave maximum value that is available in the game
-    private const float DRAWING_HEAVE_MAX = 1.0f;
-
-    // Heave change step
-    private const float DRAWING_HEAVE_STEP = 0.05f;
-
-    // Maximum value of pitch angle that is available in the game
-    //private const float DRAWING_PITCH_MAX = 16;
-    private const float DRAWING_PITCH_MAX = 2;
-
-    // Pitch change step
-    //private const float DRAWING_PITCH_STEP = 1;
-    private const float DRAWING_PITCH_STEP = 0.1f;
-
-    // Maximum value of roll angle that is available in the game
-    //private const float DRAWING_ROLL_MAX = 16;
-    private const float DRAWING_ROLL_MAX = 2;
-
-    // Pitch change step
-    //private const float DRAWING_ROLL_STEP = 1;
-    private const float DRAWING_ROLL_STEP = 0.1f;
-
-    // Shaft object
-    private GameObject m_shaft = null;
-
-    // Board object
-    private GameObject m_board = null;
-
-    // Origin position of the shaft
-    private Vector3 m_originPosition;
-
-    // Origin rotation of the board
-    private Vector3 m_originRotation;
-
-    // Current platform's heave in game
-    private float m_heave = 0;
-
-    // Current platform's pitch in game
-    private float m_pitch = 0;
-
-    // Current platform's roll in game
-    private float m_roll = 0;
-
-    // FSMI api
-    private ForceSeatMI m_fsmi;
-
-    // Position in logical coordinates that will be send to the platform
-    private FSMI_TopTablePositionLogical m_platformPosition = new FSMI_TopTablePositionLogical();
-
-    /** 
-     * Rolling Position (left/right lean), (positive -> right lean, negative -> left lean)
-     * <see cref="PLATFORM_POSITION_LOGIC_MIN"/>
-     * <see cref="PLATFORM_POSITION_LOGIC_MAX"/>
-     */
-    public float RollPosition = 0;
-
-    /**
-     * Forward Pitch (positive -> bike leans forward, negative -> bike leans back)
-     * max val: <see cref="DRAWING_PITCH_MAX"/>
-     * with incremental steps of <see cref="DRAWING_PITCH_STEP"/>
-     */
-    public float PitchPosition = 0;
-
-    #endregion
-
     void Start() {
-        ApplySelectedCondition();
-        setCalculationModel();
-        setUduinoEvent();
-        setRealismSupportLevel();
-        setFSMI();
+       
     }
-
-    private void ApplySelectedCondition() {
-        GameObject bike = GameObject.Find("EternityBike");
-
-        if (bike == null || selectedCondition == null) {
-            Debug.LogError("Bike or selected condition not found.");
-            return;
-        }
-
-        var def = selectedCondition.GetComponent<ConditionDefinition>();
-
-        if (def != null) {
-            def.ApplyToBike(bike, this);
-            Debug.Log("[Condition] Loaded: " + selectedCondition.name);
-        } else {
-            Debug.LogWarning("No ConditionDefinition found on selected object.");
-        }
-    }
-
-    private void setCalculationModel() {
-        //@levent here, it's ugly i know... i will think of something better...
-        activeCalculationModelIndex = 0;
-        ((RealismPlatformCalculationModel)calculationModelRegistry[activeCalculationModelIndex]).setPlatform(this);
-        calculationModelRegistry[activeCalculationModelIndex].setLogCalculations(activateCalculationLogging);
-    }
-    private void setRealismSupportLevel() {
-        if (currentRealismSupportLevel == RealismSupportLevel.OptimizedSupport) {
-            speedCalculationMultiplier = 0.6f;
-            speedCalculationExponent = 1.7f;
-            RollMultiplier = custom_rollMultipliers[custom_rollMultiplierInd];
-        } else if (currentRealismSupportLevel == RealismSupportLevel.FullSupport) {
-            speedCalculationMultiplier = 1.0f;
-            speedCalculationExponent = 2.0f;
-            RollMultiplier = custom_rollMultipliers[custom_rollMultiplierInd];
-        } else if (currentRealismSupportLevel == RealismSupportLevel.NoSupport) {
-            RollMultiplier = 0;
-        }
-    }
-    private void setUduinoEvent() {
-        UduinoManager.Instance.OnDataReceived += UpdateEternityBikeData;
-    }
-
-    /*Load ForceSeatMI library from ForceSeatPM installation directory */
-
     void Update() {
         HandleInputs();
     }
 
     void FixedUpdate() {
-        // Update values in order to received user's input
-        UpdateValue(ref m_pitch, Input.GetAxis("Vertical"), DRAWING_PITCH_STEP, -DRAWING_PITCH_MAX, DRAWING_PITCH_MAX);
-        UpdateValue(ref m_roll, SteeringAngle, DRAWING_ROLL_STEP, -DRAWING_ROLL_MAX, DRAWING_ROLL_MAX);
-        UpdateValue(ref m_heave, Input.GetKey(KeyCode.Space) ? 1 : 0, DRAWING_HEAVE_STEP, 0, DRAWING_HEAVE_MAX);
+
     }
 
     private void HandleInputs() {
-        if (Input.GetKeyDown("r")) {
-            SceneManager.LoadScene("BikeSimulator"); //Load Main Scene
-            Debug.Log("Reset Scene");
-        }
-        if (Input.GetKeyDown("p")) {
-            Bicycle = GameObject.Find("EternityBike");
-            var spawnpoint = spawnPoints[currentSpawnPoint];
-            currentSpawnPoint = (currentSpawnPoint + 1) % spawnPoints.Length;
-
-            Bicycle.transform.position = spawnpoint.position;
-            Bicycle.transform.rotation = spawnpoint.rotation;
-
-            //Bicycle.transform.position = new Vector3(-360, 0.09f, 430);
-            Debug.Log("Load Parking lot"); //TODO Check if still acurate
-        }
-        if (Input.GetKeyDown("l")) {
-            for (int i = 0; i < routes.Length; ++i) routes[i].gameObject.SetActiveRecursively(false);
-            routes[currentRoute].gameObject.SetActiveRecursively(true);
-            currentRoute = (currentRoute + 1) % routes.Length;
-        }
-        if (Input.GetKeyDown("n")) {
-            currentRealismSupportLevel = RealismSupportLevel.NoSupport;
-            setRealismSupportLevel();
-            Debug.Log("Changed Support Level to: No Support");
-        }
-        if (Input.GetKeyDown("f")) {
-            currentRealismSupportLevel = RealismSupportLevel.FullSupport;
-            setRealismSupportLevel();
-            Debug.Log("Changed Support Level to: Full Support");
-        }
-        if (Input.GetKeyDown("o")) {
-            currentRealismSupportLevel = RealismSupportLevel.OptimizedSupport;
-            setRealismSupportLevel();
-            Debug.Log("Changed Support Level to: Optimized Support");
-        }
-        if (Input.GetKeyDown("t")) {
-            activeCalculationModelIndex = (activeCalculationModelIndex + 1) % calculationModelRegistry.Length;
-            Debug.Log("New Active Calculation-Model: " + calculationModelRegistry[activeCalculationModelIndex].getLabel());
-        }
-        if (Input.GetKeyDown("x")) {
-            Bicycle = GameObject.Find("EternityBike");
-            Bicycle.transform.position = new Vector3(0f, 0.1f, 0f);
-            Debug.Log("Load New Level"); //TODO Check Function
-        }
-        if (Input.GetKeyDown("c")) {
-            controller_mode = !controller_mode;
-            Debug.Log("Controller Mode " + controller_mode);
-        }
-        if (Input.GetKeyDown("i")) {
-            loadLevel(level);
-            level = (level + 1) % max_levels;
-        }
-        if (Input.GetKeyDown("z")) {
-            logger.setActive(!logger.isActive(), this);
-            elapsed = 0;
-        }
-        if (OVRInput.Get(OVRInput.Axis1D.SecondaryIndexTrigger) > 0) {
-            //TODO Quick Fix for brakes
-            Debug.Log("Secondary Trigger: " + OVRInput.Axis1D.SecondaryIndexTrigger.ToString());
-        }
-        if (OVRInput.Get(OVRInput.Axis2D.SecondaryThumbstick) != null) {
-            //Keeps left Controller acitve
-        }
+        
     }
 
     private void UpdateValue(ref float value, float input, float step, float min, float max) {
@@ -421,7 +204,7 @@ public abstract class AbstractPlatformCalculationModel {
 }
 
 public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationModel {
-    GameControllerScript platform;
+    GameController platform;
 
     public RealismPlatformCalculationModel(float minTilt,
         float maxTilt,
@@ -433,7 +216,7 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
         this.platform = null;
     }
 
-    public void setPlatform(GameControllerScript platform) {
+    public void setPlatform(GameController platform) {
         this.platform = platform;
     }
 
@@ -445,10 +228,10 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
      * TODO: @levent fix ugly references to platform...
      */
     protected override float calculateTilt2(float velocity, float steeringAngle) {
-        float Range = GameControllerScript.PLATFORM_POSITION_LOGIC_MAX / (this.platform.supportedAngle * 1000);
+        float Range = GameController.PLATFORM_POSITION_LOGIC_MAX / (this.platform.supportedAngle * 1000);
 
         float speedInMS = this.platform.BikeSpeed / 3.6f;
-        double iCalc = Mathf.Atan((float)Math.Pow(this.platform.speedCalculationMultiplier * speedInMS, this.platform.speedCalculationExponent) / (GameControllerScript.GRAVITATIONAL_ACCELERATION * this.platform.ICurveRadius)) * (180 / Math.PI);
+        double iCalc = Mathf.Atan((float)Math.Pow(this.platform.speedCalculationMultiplier * speedInMS, this.platform.speedCalculationExponent) / (GameController.GRAVITATIONAL_ACCELERATION * this.platform.ICurveRadius)) * (180 / Math.PI);
         this.platform.calculatedTiltAngle = (float)iCalc;
 
         this.platform.supportFactor = 90 / this.platform.supportedAngle;
@@ -472,11 +255,11 @@ public class RealismPlatformCalculationModel : ApproximatedPlatformCalculationMo
 
         this.platform.ITiltAngleMax = this.platform.ITiltAngle;
 
-        if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.OptimizedSupport) {
+        if (this.platform.currentRealismSupportLevel == GameController.RealismSupportLevel.OptimizedSupport) {
             this.platform.ITiltAngle = this.platform.calculatedTiltAngle * this.platform.Sign / this.platform.optimizedITiltAngleFactor;
-        } else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.FullSupport) {
+        } else if (this.platform.currentRealismSupportLevel == GameController.RealismSupportLevel.FullSupport) {
             this.platform.ITiltAngle = (float)Math.Truncate(this.platform.calculatedTiltAngle * this.platform.Sign);
-        } else if (this.platform.currentRealismSupportLevel == GameControllerScript.RealismSupportLevel.NoSupport) {
+        } else if (this.platform.currentRealismSupportLevel == GameController.RealismSupportLevel.NoSupport) {
             this.platform.ITiltAngle = 0;
         }
 

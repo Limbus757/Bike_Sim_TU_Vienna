@@ -22,7 +22,7 @@ using UnityEngine.Diagnostics;
 
         public BikeController bikeControllerScript; // get access to BikeCtrollerScript
         public WaypointsTravelBike waypointsTravelBike;  // get access to WaypointsTravelBike script
-        public GameControllerScript gameControllerScript; //get access yo GameControllerScript
+        public GameController gameControllerScript; //get access yo GameControllerScript
         
 
         public bool ReleaseOccur;

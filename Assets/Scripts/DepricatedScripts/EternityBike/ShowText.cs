@@ -23,7 +23,7 @@ public class ShowText : MonoBehaviour
     {
         if (BikeSimulator != null)
         {
-            GameControllerScript p = BikeSimulator.GetComponent<GameControllerScript>();
+            GameController p = BikeSimulator.GetComponent<GameController>();
             HandleBarCollider whb = WheelHandleBar.GetComponent<HandleBarCollider>();
 
             // Debug.Log("Jup " + p.BikeSpeed);

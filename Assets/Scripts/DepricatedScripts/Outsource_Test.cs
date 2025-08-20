@@ -57,7 +57,7 @@ public class Outsource_Test : MonoBehaviour
 
     DateTime prevTime;
 
-    public GameControllerScript gameController;
+    public GameController gameController;
 
 
     int physicalSwitch = 0;

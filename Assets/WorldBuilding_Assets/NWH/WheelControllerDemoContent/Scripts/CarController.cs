@@ -53,7 +53,7 @@ namespace NWH.WheelController3D
                 float absYAxis = yAxis < 0 ? -yAxis : yAxis;
                 
                 Rigidbody rgb = GetComponent<Rigidbody>();
-                GameControllerScript platform = GetComponent<GameControllerScript>();
+                GameController platform = GetComponent<GameController>();
                 
                 velocity    = transform.InverseTransformDirection(rgb.velocity).z;
                 smoothXAxis = Mathf.SmoothDamp(smoothXAxis, xAxis, ref xAxisVelocity, 0.12f);
