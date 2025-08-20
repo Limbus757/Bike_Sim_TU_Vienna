@@ -9,35 +9,59 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
     private Quaternion initialHandlebarRotation, initialControllerRotation;
     public bool initializationComplete = false;
     public float SteeringAngle { get; private set; } = 0.0f;
-   private bool steeringInitialized = false;
+    private bool steeringInitialized = false;
+
+
+    [SerializeField] private UduinoController uduinoController;
+
+    private float uduinoBikeSpeed;
+    private float uduinoFrontBrakeForce;
+    private float uduinoBackBrakeForce;
+    private float uduinoResistance;
+    private float uduinoCombinedBrakeForce;
 
     public float GetBackBrakeForce() {
-        throw new System.NotImplementedException();
+        return uduinoBackBrakeForce;
     }
 
     public float GetFrontBrakeForce() {
-        throw new System.NotImplementedException();
+        return uduinoFrontBrakeForce;
     }
 
     public float GetResistance() {
-        throw new System.NotImplementedException();
+        return uduinoResistance;
     }
 
     public float GetSpeed() {
-        throw new System.NotImplementedException();
+        return uduinoBikeSpeed;
     }
 
     public float GetSteeringAngle() {
+        UpdateSteeringAngle();
         return SteeringAngle;
     }
 
     void Awake() {
-        if (leftController == null) {
-            Debug.LogError("PhysicalBikeInputProvider: 'Left Controller' GameObject not assigned! Steering input will not work.");
+        InitializeSteering();
+
+        if (uduinoController != null) {
+            uduinoController.OnUduinoDataReceived += OnUduinoDataReceived;
+        } else {
+            Debug.LogError("PhysicalBikeInputProvider: UduinoController reference not set! Input will not work.");
         }
     }
 
-    void Start() {
+    private void InitializeSteering() {
+        handlebar = this.transform.Find("WheelHandleBar");
+
+        if (handlebar == null) {
+            Debug.LogError("PhysicalBikeInputProvider: 'WheelHandleBar' child Transform not found! Please assign correctly or check name.");
+        }
+
+        if (leftController == null) {
+            Debug.LogError("PhysicalBikeInputProvider: 'Left Controller' GameObject not assigned! Steering input will not work.");
+        }
+
         if (!steeringInitialized && leftController != null) {
             initialHandlebarRotation = handlebar.rotation;
             initialControllerRotation = leftController.transform.rotation;
@@ -46,8 +70,14 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
         }
     }
 
-    void Update() {
-        UpdateSteeringAngle();
+    private void OnUduinoDataReceived(float speed, float steering, float f_brake, float b_brake, float combined_brake, float resistance) {
+        // This method is called by the UduinoController's event.
+        // It updates the internal state of this provider.
+        uduinoBikeSpeed = speed;
+        uduinoFrontBrakeForce = f_brake;
+        uduinoBackBrakeForce = b_brake;
+        uduinoCombinedBrakeForce = combined_brake;
+        uduinoResistance = resistance;
     }
 
     private void UpdateSteeringAngle() {

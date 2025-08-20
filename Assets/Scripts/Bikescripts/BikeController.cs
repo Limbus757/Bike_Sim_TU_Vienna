@@ -5,6 +5,28 @@ using MotionSystems;
 using System;
 
 public class BikeController : MonoBehaviour {
+
+    #region Input-Control-Parameters
+    public enum InputMode { Microcontroller, Gamepad }
+
+    [Header("Input Mode Settings")]
+    [Tooltip("Select the active input mode.")]
+    public InputMode currentInputMode = InputMode.Microcontroller;
+
+    public enum VisualTiltingMode { Disabled, Enabled }
+
+    [Header("Camera Tilt Mode Settings")]
+    [Tooltip("Select the camera tilt mode.")]
+    public VisualTiltingMode currentVisualTiltingMode = VisualTiltingMode.Disabled;
+
+    public enum RollAndPitchMode { Disabled, Enabled, NoTilt, NoPitch }
+
+    [Header("Platform Mode Settings")]
+    [Tooltip("Select the platform mode.")]
+    public RollAndPitchMode currentRollAndPitchMode = RollAndPitchMode.Disabled;
+
+    #endregion
+
     public float bikeSpeed { get; private set; }
     public float steeringAngle { get; private set; }
     public float turnRadius { get; private set; }
@@ -20,7 +42,7 @@ public class BikeController : MonoBehaviour {
     private float tiltMultiplier = 0.5f;
     private float pitchMultiplier = 50f;
 
-    // References specific to BikeController
+    // references specific to BikeController
     public GameObject BikeBase;
     public GameObject HandleBar;
     public GameObject Camera;
@@ -28,7 +50,8 @@ public class BikeController : MonoBehaviour {
 
     private IBikeInputProvider inputProvider;
 
-    private GameControllerScript gameControllerScript;
+    private GameController gameControllerScript;
+    private MotionPlatformController motionPlatform;
     private HandleBarCollider handleBarColliderScript;
     private Bike bikeModel;
     private Rigidbody bikeRigidBody;
@@ -52,7 +75,7 @@ public class BikeController : MonoBehaviour {
             Debug.LogError("BikeController: MotionPlatformController not found in scene! Cannot send platform data.");
         }
 
-        // Initialize bike's internal state variables
+        // initialize bike's internal state
         bikeSpeed = 0f;
         steeringAngle = 0f;
         frontBrakeforce = 0f;
@@ -62,11 +85,11 @@ public class BikeController : MonoBehaviour {
     }
 
     private void FetchInputProvider() {
-        switch (gameControllerScript.currentInputMode) { 
-        case GameControllerScript.InputMode.Microcontroller:
+        switch (currentInputMode) { 
+        case InputMode.Microcontroller:
             inputProvider = FindObjectOfType<PhysicalBikeInputProvider>();
             break;
-        case GameControllerScript.InputMode.Gamepad:
+        case InputMode.Gamepad:
             inputProvider = FindObjectOfType<GamepadInputProvider>();
             break;
         default:
@@ -157,23 +180,23 @@ public class BikeController : MonoBehaviour {
         float calculatedPitch = (pitchAngle - 90) * 600f;
         //calculatedPitch += tempBrakeForce * 500;
 
-        switch (gameControllerScript.currentPlatformRollAndPitchMode) {
-            case GameControllerScript.PlatformRollAndPitchMode.Enabled:
+        switch (currentRollAndPitchMode) {
+            case RollAndPitchMode.Enabled:
                 tempTilt = calculatedTilt;
                 tempPitch = calculatedPitch;
                 break;
 
-            case GameControllerScript.PlatformRollAndPitchMode.NoTilt:
+            case RollAndPitchMode.NoTilt:
                 tempTilt = 0;
                 tempPitch = calculatedPitch;
                 break;
 
-            case GameControllerScript.PlatformRollAndPitchMode.NoPitch:
+            case RollAndPitchMode.NoPitch:
                 tempTilt = calculatedTilt;
                 tempPitch = 0;
                 break;
 
-            case GameControllerScript.PlatformRollAndPitchMode.Disabled:
+            case RollAndPitchMode.Disabled:
                 tempTilt = 0;
                 tempPitch = 0;
                 break;
@@ -188,6 +211,7 @@ public class BikeController : MonoBehaviour {
         // Apply the calculated values to the bike's properties
         rollPosition = tempTilt;
         pitchPosition = tempPitch;
+        motionPlatform.UpdatePlatformPosition(pitchPosition, rollPosition);
     }
 }
 

@@ -110,9 +110,8 @@ public class MotionPlatformController : MonoBehaviour {
         this.pitchPosition = newPitch;
         this.rollPosition = newRoll;
 
-        // Apply these new positions to the physical and visual platforms
-        UpdatePlatformVisuals();
         SendDataToFSMIPlatform();
+        UpdatePlatformVisuals();
     }
 
     /// <summary>

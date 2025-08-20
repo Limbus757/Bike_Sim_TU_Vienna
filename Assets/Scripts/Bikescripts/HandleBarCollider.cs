@@ -65,7 +65,7 @@ public class HandleBarCollider : MonoBehaviour
     public GameObject sphere;
 
     private GameObject CurrentBall = null;
-    public GameControllerScript gameControllerScript;
+    public GameController gameControllerScript;
     //public DetectMinMaxLineCollision_version2 detectMinMaxLine;
 
     public DetectMinMaxLineCollision_version2 detectMinMaxLine;
@@ -295,7 +295,7 @@ public class HandleBarCollider : MonoBehaviour
             {
                 ballDistanceMin = ballDistance;
 
-                GameControllerScript p = BikeSimulator.GetComponent<GameControllerScript>();
+                GameController p = BikeSimulator.GetComponent<GameController>();
                 // supportLevel = p.supportLevel.ToString();
                 ballDistanceMinVelocity = p.BikeSpeed;
                 ballDistanceMinSteeringAngle = p.ISteeringAngle;
