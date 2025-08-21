@@ -50,15 +50,8 @@ public class BikeController : MonoBehaviour {
 
     private IBikeInputProvider inputProvider;
 
-    private GameController gameControllerScript;
     private MotionPlatformController motionPlatform;
-    private HandleBarCollider handleBarColliderScript;
-    private Bike bikeModel;
     private Rigidbody bikeRigidBody;
-
-    public Quaternion initialBikeRotation;
-    private Transform handlebar;
-    private Quaternion initalHandlebarRotation, initialControllerRotation;
 
     private MotionPlatformController motionPlatformController;
 
@@ -118,7 +111,7 @@ public class BikeController : MonoBehaviour {
 
         float targetSpeed = bikeSpeed / 3.6f; // km/h to m/s
         float currentSpeed = rigidBody.velocity.magnitude;
-        float brakeForce = gameControllerScript.appliedBrakeForce;
+        float brakeForce = backBrakeforce + frontBrakeforce;
 
         Vector3 forward = transform.forward;
         Vector3 currentDir = rigidBody.velocity.normalized;
@@ -168,7 +161,7 @@ public class BikeController : MonoBehaviour {
 
     private void UpdateBikeTiltAndPitch() {
 
-        #error  TODO REFINE CALULATIONS
+        #warning  TODO REFINE CALULATIONS
         // Variables for calculations
         float tempTilt = 0;
         float tempPitch = 0;

@@ -12,7 +12,7 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
     private bool steeringInitialized = false;
 
 
-    [SerializeField] private UduinoController uduinoController;
+    [SerializeField] private ArduinoSerialManager arduinoSerialManager;
 
     private float uduinoBikeSpeed;
     private float uduinoFrontBrakeForce;
@@ -43,12 +43,6 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
 
     void Awake() {
         InitializeSteering();
-
-        if (uduinoController != null) {
-            uduinoController.OnUduinoDataReceived += OnUduinoDataReceived;
-        } else {
-            Debug.LogError("PhysicalBikeInputProvider: UduinoController reference not set! Input will not work.");
-        }
     }
 
     private void InitializeSteering() {

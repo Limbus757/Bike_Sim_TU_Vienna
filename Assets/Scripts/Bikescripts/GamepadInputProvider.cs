@@ -19,8 +19,19 @@ public class GamepadInputProvider : MonoBehaviour, IBikeInputProvider
         return Input.GetAxis("RightTrigger") * gamepadAccelerationSensitivity;
     }
 
-    public float GetBrakeForce()
-    {
+    public float GetSpeed() {
+        throw new System.NotImplementedException();
+    }
+
+    public float GetFrontBrakeForce() {
         return Input.GetAxis("LeftTrigger") * gamepadBrakeSensitivity;
+    }
+
+    public float GetBackBrakeForce() {
+        return Input.GetAxis("LeftTrigger") * gamepadBrakeSensitivity;
+    }
+
+    public float GetResistance() {
+        throw new System.NotImplementedException();
     }
 }
