@@ -24,19 +24,17 @@ public class GameController : MonoBehaviour {
     public Spawnpoint currentSpawnpoint = Spawnpoint.Course1_Spawnpoint1;
 
     [Header("Course Reference")]
-    [Tooltip("Drag the parent GameObjects of your splines here. Index 0 is Course 1, Index 1 is Course 2, etc.")]
+    [Tooltip("Add the parent GameObjects of your splines here. Index 0 is Course 1, Index 1 is Course 2, etc.")]
     public SplineContainer[] courses;
 
     [Header("Bike Reference")]
-    [Tooltip("Drag the bike's Transform here.")]
+    [Tooltip("Add the bike Gameobject here.")]
     public GameObject bike;
-
     private Rigidbody bikeRigidbody;
 
     #endregion
 
     void Start() {
-        // At the start of the game, initialize the course and place the bike
         InitializeCourseAndBikePosition();
     }
 
@@ -65,7 +63,6 @@ public class GameController : MonoBehaviour {
         int knotIndex = spawnpointValue % 100;
         Debug.Log($"Extracted Course Index: {courseIndex}, Extracted Knot Index: {knotIndex}");
 
-        // Validate that the course index is within the bounds of the array
         if (courseIndex < 0 || courseIndex >= courses.Length) {
             Debug.LogError($"Course index {courseIndex} is out of bounds. Please check the Spawnpoint enum.");
             return;
@@ -93,7 +90,6 @@ public class GameController : MonoBehaviour {
 
         // Convert the local knot position to a world position
         Vector3 startPosition = courses[courseIndex].transform.TransformPoint(knotLocalPosition);
-        startPosition += Vector3.up; // 1-unit offset on the Y-axis.
 
         // Get the knot's rotation in local space and convert it to a world rotation
         Quaternion knotLocalRotation = knotArray[knotIndex].Rotation;
