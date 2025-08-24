@@ -7,7 +7,7 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
     public GameObject leftController;
     private Transform handlebar;
     private Quaternion initialHandlebarRotation, initialControllerRotation;
-    public bool initializationComplete = false;
+    private bool initializationComplete = false;
     public float SteeringAngle { get; private set; } = 0.0f;
     private bool steeringInitialized = false;
 
@@ -83,8 +83,6 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
             tempSteeringAngle = Mathf.Clamp(Mathf.DeltaAngle(0, tempSteeringAngle), -90, 90);
             // reveal calculated steering angle
             SteeringAngle = tempSteeringAngle;
-            // apply the calculated steering angle to the visual handlebar's local rotation
-            handlebar.localEulerAngles = new Vector3(0.0f, SteeringAngle, 0.0f);
         } else {
             Debug.Log("SteeringInputProvider: Initialization failed, cannot change steering angle!");
         }
