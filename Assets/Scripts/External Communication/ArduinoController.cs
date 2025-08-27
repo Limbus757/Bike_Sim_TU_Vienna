@@ -29,7 +29,7 @@ public class ArduinoSerialManager : MonoBehaviour {
     public string portName = "COM3";
 
     [Tooltip("The communication speed in bits per second.")]
-    public int baudRate = 9600;
+    public int baudRate = 115200;
     #endregion
 
     #region Private Fields
@@ -57,6 +57,7 @@ public class ArduinoSerialManager : MonoBehaviour {
         // Check for new data in the queue on the main Unity thread.
         // This is a safe way to handle data received from a background thread.
         ProcessReceivedData();
+        // Write();
     }
 
     /// <summary>
@@ -147,8 +148,15 @@ public class ArduinoSerialManager : MonoBehaviour {
         }
     }
 
+
+    void OnDestroy() {
+        isReading = false;
+        if (readThread != null && readThread.IsAlive) {
+            readThread.Join();
+        }
+    }
+
     void OnApplicationQuit() {
-        // Properly shut down the thread and close the serial port when the application quits.
         isReading = false;
         if (readThread != null && readThread.IsAlive) {
             readThread.Join();

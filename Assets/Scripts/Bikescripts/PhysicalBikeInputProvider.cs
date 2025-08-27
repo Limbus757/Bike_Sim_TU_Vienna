@@ -81,7 +81,6 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
             tempSteeringAngle = (initialControllerRotation * leftController.transform.rotation * initialHandlebarRotation).eulerAngles.y;
             // adjust Steering angle to alyways be between [-90;90] degrees 
             tempSteeringAngle = Mathf.Clamp(Mathf.DeltaAngle(0, tempSteeringAngle), -90, 90);
-            // reveal calculated steering angle
             SteeringAngle = tempSteeringAngle;
         } else {
             Debug.Log("SteeringInputProvider: Initialization failed, cannot change steering angle!");
