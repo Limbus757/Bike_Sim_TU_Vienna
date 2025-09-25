@@ -1,33 +1,70 @@
 /*
   This version uses FreeRTOS to handle BLE, serial communication sending,
   and serial communication receiving on three separate tasks.
-  This provides a more robust and responsive solution by preventing one process
-  from blocking the other.
 
-  The circuit:
-  - Arduino Uno WiFi Rev2 board
+  Board:
+  - Arduino Uno WiFi Rev 4 board
 */
 
 #include <ArduinoBLE.h>
-#include <FreeRTOS_AVR.h> // Make sure this library is installed for your board
+#include <FreeRTOS_AVR.h> 
 #include "Arduino_LED_Matrix.h"
 
 //Pins
 #define FRONTBRAKE_PIN A3
 #define BACKBRAKE_PIN A4
 
-// Data to be sent to Unity (volatile to ensure latest value is always read)
+// TODO: Micheal: ADD PWM Functionality for handle motors
+// #define VIBRATION_MOTOR_PIN1 A7
+// #define VIBRATION_MOTOR_PIN2 A7
+
+// TODO: Thomas: ADD Handlebar Motor Control Pins
+
+// ##### LED MATRIX OBJECTS #####
+
+// Matrix Object
+ArduinoLEDMatrix matrix;
+
+// Timestamps for LED matrix state changes
+volatile unsigned long lastDataSentTime = 0;
+volatile unsigned long lastDataReceivedTime = 0;
+
+unsigned long bleConnected = 0x00000000;
+unsigned long dataReceived = 0x00000000;
+unsigned long dataSent = 0x00000000;
+
+// State frames for LED matrix
+unsigned long statusFrame[] = {
+  bleConnected,
+  dataReceived,
+  dataSent
+};
+
+SemaphoreHandle_t xLedMutex;
+
+// ##### UNITY DATA ##### (volatile to ensure latest value is always read)
+
+//Data to be sent
 volatile float speedO = 0.0;
-volatile float steeringAngle = 0.0;
+volatile float steeringAngle = 0.0; //right now unused in Unity but still sent if needed for later upgrades.
 volatile float frontBrakeForce = 0.0;
 volatile float rearBrakeForce = 0.0;
-volatile float resistance = 0.0;
-volatile float pitch = 0.0;
-volatile float roll = 0.0;
+volatile float resistance = 0.0; //unused in Unity only sent to be monitored
 
-// BLE objects
+// Received Data
+volatile float placeholderValue1 = 0.0;
+volatile float placeholderValue2 = 0.0;
+volatile float placeholderValue3 = 0.0;
+volatile float placeholderValue4 = 0.0;
+volatile float placeholderValue5 = 0.0;
 
-"Tacx Flux-2 18201"
+// Mutex to protect shared variables from simultaneous access by multiple tasks
+SemaphoreHandle_t xDataMutex;
+
+// ##### BLE objects ##### 
+
+// "Tacx Flux-2 18201" is the bikefest ID
+// "Tacx Flux-2 36608" is the lab bike ID
 const char* deviceToConnect = "Tacx Flux-2 36688"
 uint8_t speedLSB = 0x00;
 uint8_t speedMSB = 0x00;
@@ -38,30 +75,20 @@ int FCPinit = 0;
 BLECharacteristic indoorBikeDataCharacteristic;
 BLECharacteristic fitnessMachineControlPointCharacteristic;
 
-// Mutex to protect shared variables from simultaneous access by multiple tasks
-SemaphoreHandle_t xDataMutex;
+// ##### Task Functions #####
 
-// --- Task Functions ---
-
-/// <summary>
-/// FreeRTOS Task for handling BLE communication with the bike.
-/// </summary>
+// FreeRTOS Task for handling BLE communication with the bike.
 void bleMonitorTask(void *pvParameters) {
-  // Task specific setup
-  
-  // Scan for peripheral and connect
-  BLE.scan();
+  BLE.begin();
+  BLE.scanforName(deviceToConnect);
 
-  // Task loop
   while (true) {
     BLEDevice peripheral = BLE.available();
     if (peripheral) {
-      if (peripheral.localName() == deviceToConnect) {
-        BLE.stopScan();
-        monitorIndoorBikeData(peripheral);
-        
-        // Peripheral disconnected, start scanning again
-        BLE.scan();
+      BLE.stopScan();
+      monitorIndoorBikeData(peripheral);
+      BLE.scanforName(deviceToConnect); // if the peripheral disconnected, start scanning again
+
       }
     }
     // Yield to other tasks
@@ -69,9 +96,131 @@ void bleMonitorTask(void *pvParameters) {
   }
 }
 
-/// <summary>
+/// FreeRTOS Task for handling serial communication, sending to Unity
+void serialSendTask(void *pvParameters) {
+  while (true) {
+    if (Serial.availableForWrite() > 0) {
+      measureTimeElapsed(lastTimeDataSent, &dataSent);
+
+      xSemaphoreTake(xDataMutex, portMAX_DELAY);
+      String outputString = String(speedO, 2) 
+          + String(steeringAngle) 
+          + String(frontBrakeForce) 
+          + String(rearBrakeForce)
+          + String(resistance);
+      lastDataSentTime = millis();
+      xSemaphoreGive(xDataMutex);
+            
+      Serial.println(outputString);
+    }
+  // TODO: Implement read steering agnle form Motor if possible
+  readBrakes();
+  vTaskDelay(pdMS_TO_TICKS(15)); //sending rate : 15ms
+  }
+}
+
+// Task for handling serial communication, received from Unity
+void serialReceiveTask(void *pvParameters) {
+  while (true) {
+    if (Serial.available()) {
+      measureTimeElapsed(lastTimeDataReceived, &dataReceived);
+
+      String incomingCommand = Serial.readStringUntil('\n');
+      incomingCommand.trim();
+
+      if (xSemaphoreTake(xDataMutex, portMAX_DELAY) == pdTRUE) {
+        if (incomingCommand.startsWith("Resistance:")) {
+          String valueString = incomingCommand.substring(11);
+          int newResistance = valueString.toInt();
+          resistance = newResistance;
+          
+          if (fitnessMachineControlPointCharacteristic) {
+            uint8_t opCode = 0x04;
+            int resistanceSupport = (int)resistance * 40;
+            uint8_t msb = resistanceSupport / 256;
+            uint8_t lsb = resistanceSupport - (msb * 256);
+            uint8_t potResistance[3] = {opCode, lsb, msb};
+            fitnessMachineControlPointCharacteristic.writeValue(potResistance, 3);
+          }
+        }
+        xSemaphoreGive(xDataMutex);
+      }
+    }
+    vTaskDelay(pdMS_TO_TICKS(15)); //receiving rate : 15ms
+  }
+}
+
+void serialReceiveTask(void *pvParameters) {
+  while (true) {
+    if (Serial.available()) {
+      lastDataReceivedTime = millis();
+      String incomingCommand = Serial.readStringUntil('\n');
+      incomingCommand.trim();
+
+      int lastIndex = 0;
+      int semicolonIndex;
+      int valueIndex = 0;
+      float values[5];
+
+      while ((semicolonIndex = incomingCommand.indexOf(';', lastIndex)) != -1 && valueIndex < 5) {
+        String valueString = incomingCommand.substring(lastIndex, semicolonIndex);
+        values[valueIndex] = valueString.toFloat();
+        lastIndex = semicolonIndex + 1;
+        valueIndex++;
+      }
+      
+      // Check for the last value after the last semicolon
+      if (lastIndex < incomingCommand.length() && valueIndex < 5) {
+        String valueString = incomingCommand.substring(lastIndex);
+        values[valueIndex] = valueString.toFloat();
+        valueIndex++;
+      }
+
+      placeholderValue1 = values[0];
+      placeholderValue2 = values[1];
+      placeholderValue3 = values[2];
+      placeholderValue4 = values[3];
+      placeholderValue5 = values[4];
+
+    }
+    vTaskDelay(pdMS_TO_TICKS(15));
+  }
+}
+
+void renderMatrixTask(void* parameter) {
+  matrix.begin();
+  while (true) {
+    matrix.beginDraw();
+    matrix.fillScreen(0x0000);
+    matrix.renderBitmap(statusFrame, 8, 12);
+    matrix.endDraw();
+    vTaskDelay(pdMS_TO_TICKS(100));
+  }
+}
+
+// ##### SUBROUTINES AND FUNCTIONS #####
+
+void readBrakes(){
+  if (xSemaphoreTake(xDataMutex, portMAX_DELAY) == pdTRUE) {
+    frontBrakeForce = map(analogRead(FRONTBRAKE_PIN), 0, 1023, 0, 100);
+    rearBrakeForce = map(analogRead(BACKBRAKE_PIN), 0, 1023, 0, 100);
+  }
+  xSemaphoreGive(xDataMutex);
+}
+
+// Checks if the time elapsed since the given timestamp is greater than 250ms.
+// If it is, the LED frame part is set to 0x00000000; otherwise, it's set to 0x11110000.
+void measureTimeElapsed(unsigned long timestamp, volatile unsigned long* ledFramePart){
+  xSemaphoreTake(xLedMutex, portMAX_DELAY);
+  if ((millis() - timestamp) > 250) {
+    *ledFramePart = 0x00000000;
+  } else {
+    *ledFramePart = 0x11110000;
+  }
+  xSemaphoreGive(xLedMutex);
+}
+
 /// Subroutine for the BLE monitor task to handle connection and data reading.
-/// </summary>
 void monitorIndoorBikeData(BLEDevice peripheral) {
   if (!peripheral.connect()) {
     return;
@@ -96,7 +245,6 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
   }
 
   // Handle resistance setup
-  // This logic is simplified to run only once after connection
   if (FCPinit == 0) {
     uint8_t fmcpReset = 0x00;
     uint8_t fmcpStart = 0x07;
@@ -127,107 +275,33 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
         }
       }
     }
-
-    // Yield to allow other tasks to run
     vTaskDelay(pdMS_TO_TICKS(15));
   }
 }
 
-/// <summary>
-/// FreeRTOS Task for handling serial communication sending to Unity.
-/// </summary>
-void serialSendTask(void *pvParameters) {
-  // Task specific setup
-  
-  // Task loop
-  while (true) {
-    // Take mutex to safely read shared variables
-    if (xSemaphoreTake(xDataMutex, portMAX_DELAY) == pdTRUE) {
-      // Format and send the data string to Unity
-      Serial.print(speedO, 2);
-      Serial.print(";");
-      Serial.print(steeringAngle);
-      Serial.print(";");
-      Serial.print(frontBrakeForce);
-      Serial.print(";");
-      Serial.print(rearBrakeForce);
-      Serial.print(";");
-      Serial.println(resistance);
-      
-      // Give back the mutex
-      xSemaphoreGive(xDataMutex);
-    }
-    
-    /// TODO get steering angle input from motor.
-    // steeringAngle = map(analogRead(A2), 0, 1023, 90, -90);
-
-    // Process brake forces (these can be updated here since they are independent)
-    frontBrakeForce = map(analogRead(FRONTBRAKE_PIN), 0, 1023, 0, 100);
-    rearBrakeForce = map(analogRead(BACKBRAKE_PIN), 0, 1023, 0, 100);
-    
-    // Delay this task to control the sending rate
-    vTaskDelay(pdMS_TO_TICKS(15));
-  }
-}
-
-/// <summary>
-/// FreeRTOS Task for handling serial communication receiving from Unity.
-/// </summary>
-void serialReceiveTask(void *pvParameters) {
-  // Task specific setup
-  
-  // Task loop
-  while (true) {
-    if (Serial.available() > 0) {
-      String incomingCommand = Serial.readStringUntil('\n');
-      incomingCommand.trim();
-
-      // Safely update the resistance variable using a mutex
-      if (xSemaphoreTake(xDataMutex, portMAX_DELAY) == pdTRUE) {
-        if (incomingCommand.startsWith("RESISTANCE:")) {
-          String valueString = incomingCommand.substring(11);
-          int newResistance = valueString.toInt();
-          resistance = newResistance;
-          
-          // Update bike resistance based on the value set by Unity
-          if (fitnessMachineControlPointCharacteristic) {
-            uint8_t opCode = 0x04;
-            int resistanceSupport = (int)resistance * 40;
-            uint8_t msb = resistanceSupport / 256;
-            uint8_t lsb = resistanceSupport - (msb * 256);
-            uint8_t potResistance[3] = {opCode, lsb, msb};
-            fitnessMachineControlPointCharacteristic.writeValue(potResistance, 3);
-          }
-        }
-        xSemaphoreGive(xDataMutex);
-      }
-    }
-    // Yield to allow other tasks to run
-    vTaskDelay(pdMS_TO_TICKS(10));
-  }
-}
-
-// --- Main Setup and Loop ---
+// ##### Main Setup and Loop #####
 
 void setup() {
   Serial.begin(115200);
-  while (!Serial);
+  vTaskDelay(pdMS_TO_TICKS(100));
 
   // Create the mutex before creating tasks
   xDataMutex = xSemaphoreCreateMutex();
-  if (xDataMutex == NULL) {
-    while (1);
-  }
+  vTaskDelay(pdMS_TO_TICKS(100));
 
+  xLedMutex = xSemaphoreCreateMutex();
+  vTaskDelay(pdMS_TO_TICKS(100));
+ 
   // Create the FreeRTOS tasks
   xTaskCreate(bleMonitorTask, "BLEMonitor", configMINIMAL_STACK_SIZE * 2, NULL, 2, NULL);
   xTaskCreate(serialSendTask, "SerialSend", configMINIMAL_STACK_SIZE * 2, NULL, 1, NULL);
   xTaskCreate(serialReceiveTask, "SerialReceive", configMINIMAL_STACK_SIZE * 2, NULL, 1, NULL);
+  xTaskCreate(renderMatrixTask, "RenderMatrix", configMINIMAL_STACK_SIZE * 2, NULL, 3, NULL);
 
   // Start the scheduler. It will not return unless a task is deleted.
   vTaskStartScheduler();
 }
 
 void loop() {
-  // This is intentionally left empty. FreeRTOS takes over.
+  // This is intentionally left empty, FreeRTOS takes over.
 }
