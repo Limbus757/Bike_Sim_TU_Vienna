@@ -8,6 +8,12 @@ using UnityEngine.Splines;
 
 public class GameController : MonoBehaviour {
 
+    [Header("Study Parameters")]
+    [Tooltip("Name of the current study or trial batch.")]
+    public string studyName = "DefaultStudy";
+    [Tooltip("Numerical ID for the study participant. Use the plus/minus buttons to increment.")]
+    public int studyParticipantId = 1;
+
     #region Course-Parameters
     public enum Spawnpoint {
         Spawnpoint_0 = 0,

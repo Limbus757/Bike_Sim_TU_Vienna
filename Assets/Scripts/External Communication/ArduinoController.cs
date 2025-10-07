@@ -109,18 +109,15 @@ public class ArduinoSerialManager : MonoBehaviour {
 
                 // Parse the received string.
                 string[] values = data.Split(';');
-                if (values.Length >= 6) // Assuming at least Speed, Steering, Pitch, Roll, FrontBrake, BackBrake.
+                if (values.Length == 4) // Assuming at least Speed, Steering, Pitch, Roll, FrontBrake, BackBrake.
                 {
                     BikeData bikeData = new BikeData();
 
                     // Use TryParse for safe conversion without throwing exceptions.
                     float.TryParse(values[0], out bikeData.Speed);
-                    float.TryParse(values[1], out bikeData.SteeringAngle);
-                    float.TryParse(values[2], out bikeData.FrontBrakeForce);
-                    float.TryParse(values[3], out bikeData.BackBrakeForce);
-                    float.TryParse(values[4], out bikeData.Resistance);
-                    float.TryParse(values[5], out bikeData.Pitch);
-                    float.TryParse(values[6], out bikeData.Roll);
+                    float.TryParse(values[1], out bikeData.FrontBrakeForce);
+                    float.TryParse(values[2], out bikeData.BackBrakeForce);
+                    float.TryParse(values[3], out bikeData.Resistance);
 
                     // Invoke the event with the structured data.
                     if (OnDataReceived != null) {
