@@ -392,8 +392,6 @@ void serialReceiveTask(void *pvParameters) {
   }
 }
 
-
-
 void setup() {
   pinMode(FRONTBRAKE_PIN, INPUT);
   pinMode(BACKBRAKE_PIN, INPUT);
