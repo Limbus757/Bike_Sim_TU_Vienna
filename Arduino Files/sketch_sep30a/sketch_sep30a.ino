@@ -19,6 +19,7 @@ const char* TACX_NAME = "Tacx Flux-2 36688"; // Lab-Bike: "Tacx Flux-2 36688" ||
 const char* FTMS_SERVICE_UUID = "1826";
 const char* INDOOR_BIKE_DATA_CHAR_UUID = "2ad2"; // Speed/etc.
 const char* CONTROL_POINT_CHAR_UUID = "2ad9"; // Resistance control
+bool FCPinit = false; // State for Fitness Machine Control Point initialization
 
 // BLE Globals
 BLEDevice tacxPeripheral;
@@ -31,7 +32,7 @@ volatile int serialReceiveActualMs = 0;
 volatile int bluetoothTaskActualMs = 0;
 
 // Shared variables (to be sent over Serial)
-volatile float speedO = 0.0;
+volatile float speedf = 0.0;
 volatile float steeringAngle = 0.0;
 volatile float frontBrakeForce = 0.0;
 volatile float rearBrakeForce = 0.0;
@@ -63,7 +64,16 @@ void readAnalogAndDigitalPins() {
   switchState = digitalRead(SWITCH_PIN1);
 }
 
-void updateVibrationMotor() {
+void calculateResitance() {
+  resistance = map(((int)(frontBrakeForce + rearBrakeForce)), 0 , 200, 0, 10); 
+}
+
+void setupHandlebarVibrationMotors() {
+  pinMode(PMW_PIN1, OUTPUT);
+  pinMode(PWM_Pin2, OUTPUT);
+}
+
+void updateHandlebarVibrationMotor() {
   // Write the received 0-255 PWM values directly to the pins
   analogWrite(PMW_PIN1, handleMotorRightPMW);
   analogWrite(PWM_Pin2, handleMotorLeftPWM); 
@@ -71,11 +81,6 @@ void updateVibrationMotor() {
 
 void updateSteeringMotor() {
   // Placeholder for steering motor logic
-}
-
-void setupHandleBarVibrationMotors() {
-  pinMode(PMW_PIN1, OUTPUT);
-  pinMode(PWM_Pin2, OUTPUT);
 }
 
 // Attempts to establish a connection with the Unity application by sending an 'H' (Handshake)
@@ -131,7 +136,7 @@ void initializeBLE() {
   Serial.println("[BLE] BLE initialized. Scanning...");
 }
 
-void findBikeTrainer(bool FPCstate) {
+void connectToTACXII() {
   if (!tacxPeripheral.connected()) {
       Serial.println("[BLE] Looking for Tacx...");
       BLE.scan();
@@ -156,7 +161,6 @@ void findBikeTrainer(bool FPCstate) {
             FitnessMachineControlPointCharacteristic = tacxPeripheral.characteristic(CONTROL_POINT_CHAR_UUID);
 
             if (indoorBikeDataCharacteristic.canSubscribe() && indoorBikeDataCharacteristic.subscribe()) {
-              indoorBikeDataCharacteristic.setEventHandler(BLERead, onIndoorBikeDataCharacteristic);
               Serial.println("[BLE] Subscribed to Indoor Bike Data (2ad2).");
             } else {
               Serial.println("[BLE ERROR] Failed to subscribe to 2ad2.");
@@ -165,15 +169,24 @@ void findBikeTrainer(bool FPCstate) {
 
             // Init Fitness Machine Control Point (2ad9)
             if (FitnessMachineControlPointCharacteristic.canWrite()) {
-              // Reset Control Point (0x00)
-              uint8_t FMCPCreset = 0x00;
-              FitnessMachineControlPointCharacteristic.writeValue(&FMCPCreset, 1);
+              uint8_t FMCPCreset = 0x00; // Reset Control Point (0x00)
+              uint8_t FMCPCstart = 0x07; // Request Control (0x07)
+              FitnessMachineControlPointCharacteristic.writeValue(FMCPCreset, 2);
               vTaskDelay(pdMS_TO_TICKS(100));
 
-              // Request Control (0x07)
-              uint8_t FMCPCstart = 0x07;
-              FitnessMachineControlPointCharacteristic.writeValue(&FMCPCstart, 1);
-              Serial.println("[BLE] Sent Request Control (0x07). FCPinit set to 1.");
+              if (FitnessMachineControlPointCharacteristic.valueUpdated()) {
+                Serial.println("[BLE] Requested FMCPC Control");
+              } else {
+                Serial.println("[BLE] Couldn't Request FMCPC Control");
+              }
+
+              FitnessMachineControlPointCharacteristic.writeValue(FMCPCstart, 1);
+              if (FitnessMachineControlPointCharacteristic.valueUpdated()) {
+                Serial.println("[BLE] Started FMCPC Training");
+              } else {
+                Serial.println("[BLE] Couldn't Start FMCPC Training");
+              }
+
               FCPinit = true;
             } else {
               Serial.println("[BLE ERROR] 2ad9 characteristic not writable.");
@@ -190,22 +203,54 @@ void findBikeTrainer(bool FPCstate) {
     }
 }
 
+float readSpeedFromTACXII() {
+  const byte* charValue = indoorBikeDataCharacteristic.value();
+  size_t charValueSize = indoorBikeDataCharacteristic.valueSize();
+
+  if (charValueSize > 3) {
+      // The Speed value is an unsigned Integer 16-bit starting at byte index 2.
+      // Byte 2 is LSB, Byte 3 is MSB
+      uint16_t rawSpeed = (uint16_t)charValue[2] | ((uint16_t)charValue[3] << 8);
+      return rawSpeed * 0.01;
+  } else {
+    Serial.println("[BLE ERROR] Failed to read Speed from TACX!");
+    return 0.0;
+  }
+}
+
+void writeResitancetoTACXII() {
+  long resistanceSupportRaw = (long)(resistance * 40.0);
+  resistanceSupportRaw = constrain(resistanceSupportRaw, 0L, 65535L);
+
+  uint8_t resistanceLSB = (uint8_t)(resistanceSupportRaw & 0xFF); // Extract the lower 8 bits
+  uint8_t resistanceMSB = (uint8_t)((resistanceSupportRaw >> 8) & 0xFF);  // Shift and extract the upper 8 bits
+
+  uint8_t payload[3] = {
+        0x04, //op-code for setting the resitance
+        resistanceLSB,
+        resistanceMSB
+    };
+
+  FitnessMachineControlPointCharacteristic.writeValue(payload, 3);
+}
+
 // Task: Handles BLE connection, data read, and resistance command write to Tacx
 void bluetoothTask(void *pvParameters) {
   static uint32_t ulLastSendTime = 0; 
-  bool FCPinit* = false; // State for Fitness Machine Control Point initialization
-
+  bool FCPinit = false; 
   Serial.println("[Task] Bluetooth starting...");
-  
   initializeBLE();
 
+  uint8_t resistanceMSB = 0;
+  uint8_t resistanceLSB = 0;
+  int resistanceSupport = resistance * 40;
+  
+  
   while (1) {
-    // connection/discovery logic
-    findBikeTrainer(&FCPinit)
-
-    // connected loop (Resistance Control) ---
+    // discovery & connection logic
+    connectToTACXII();
+    // connected loop
     if (tacxPeripheral.connected() && FCPinit == 1) {
-
       // measure actual cycle time
       uint32_t ulCurrentTime = millis();
       uint32_t ulActualDuration = ulCurrentTime - ulLastSendTime;
@@ -213,31 +258,15 @@ void bluetoothTask(void *pvParameters) {
       bluetoothTaskActualMs = (int)ulActualDuration; 
 
       if (xSemaphoreTake(xBikeDataMutex, portMAX_DELAY) == pdTRUE) {
-        int CombinedBrakeForce = (int)(frontBrakeForce + rearBrakeForce);
-        
-        // Calculate Resistance (0-10 range)
-        int calculatedResistance = map(CombinedBrakeForce, 0, 200, 0, 10);
-        resistance = (float)calculatedResistance; // Update shared resistance variable
-        
-        // Prepare Resistance Command (based on original code's logic)
-        uint8_t OpCode = 0x04; // OpCode for Set Target Resistance Level
-        int ResistanceSupport = calculatedResistance * 40; // Scaling for LSB/MSB
-        
-        uint8_t MSB = ResistanceSupport / 256;
-        uint8_t LSB = ResistanceSupport % 256;
-
-        uint8_t PotResistance[3] = {OpCode, LSB, MSB};
-
-        // Write Resistance Command
-        FitnessMachineControlPointCharacteristic.writeValue(PotResistance, 3);
-        
+        speedf = readSpeedFromTACXII();
+        writeResitancetoTACXII();
         xSemaphoreGive(xBikeDataMutex);
       } else {
         Serial.println("[BLE ERROR] Failed to acquire xBikeDataMutex for control write.");
       }
     } else if (!tacxPeripheral.connected()) {
       // Reset initialization state if disconnected
-      FCPinit = 0;
+      FCPinit = false;
     }
     
     // Check if the peripheral disconnected unexpectedly
@@ -247,7 +276,7 @@ void bluetoothTask(void *pvParameters) {
     }
 
     // Use a delay appropriate for the resistance control loop
-    vTaskDelay(pdMS_TO_TICKS(BLE_CONTROL_INTERVAL_MS));
+    vTaskDelay(pdMS_TO_TICKS(BLE_TIMING_INTERVAL_MS));
   }
 }
 
@@ -264,7 +293,7 @@ void serialSendTask(void *pvParameters) {
       readAnalogAndDigitalPins();
       snprintf(outputString, sizeof(outputString),
                "U,%.2f;%.2f;%.2f;%.2f;%.2f,%d,%d,%d,%d", 
-               speedO, steeringAngle, frontBrakeForce, rearBrakeForce, resistance, switchState,
+               speedf, steeringAngle, frontBrakeForce, rearBrakeForce, resistance, switchState,
                serialSendActualMs, serialReceiveActualMs, bluetoothTaskActualMs);
       xSemaphoreGive(xBikeDataMutex);
       Serial.println(outputString);
@@ -331,7 +360,7 @@ void serialReceiveTask(void *pvParameters) {
           xSemaphoreGive(xCommandDataMutex);
 
           // Update PWM pins immediately after receiving new commands
-          updateVibrationMotor(); 
+          updateHandlebarVibrationMotor(); 
 
           // Debugging output
           Serial.print("[RX] Received and assigned: ");
@@ -363,21 +392,18 @@ void serialReceiveTask(void *pvParameters) {
   }
 }
 
-
-
 void setup() {
   pinMode(FRONTBRAKE_PIN, INPUT);
   pinMode(BACKBRAKE_PIN, INPUT);
   pinMode(SWITCH_PIN1, INPUT_PULLUP); // Assuming a button/switch input
 
-  setupHandleBarVibrationMotors();
-
+  setupHandlebarVibrationMotors();
   startSerial();
-  handshakeWithUnity(); 
-
+  handshakeWithUnity();
   createMutexes();
-  
+
   // start FreeRTOS Tasks
+  xTaskCreate(bluetoothTask, "BLETask", 1024, NULL, 1, NULL); 
   xTaskCreate(serialSendTask, "SerialSendTask", 512, NULL, 1, NULL); 
   xTaskCreate(serialReceiveTask, "SerialReceiveTask", 512, NULL, 1, NULL); 
   vTaskStartScheduler(); // starts FreeRTOS
