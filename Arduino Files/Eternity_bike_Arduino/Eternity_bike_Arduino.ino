@@ -299,6 +299,22 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
         uduino.println("Init 1");
       }
 
+      // Map von 0–200 (Sensor) auf 0–1000 (Tacx, in 0.1 Schritten)
+      uint16_t resistanceValue = map(CombinedBrakeForce, 0, 200, 0, 1000);
+
+      // FTMS OpCode für "Set Target Resistance Level"
+      uint8_t OpCode = 0x04;
+
+      // Little Endian aufteilen
+      uint8_t LSB = resistanceValue & 0xFF;
+      uint8_t MSB = (resistanceValue >> 8) & 0xFF;
+
+      // Paket aufbauen
+      uint8_t PotResistance[3] = { OpCode, LSB, MSB };
+
+      // Abschicken
+      FitnessMachineControlPointCharacteristic.writeValue(PotResistance, 3);  
+      /*
       Resistance = map(CombinedBrakeForce, 0 , 200, 0, 10);  //angle für den Widerstand
       
       uint8_t OpCode = 0x04;
@@ -313,6 +329,8 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
       uint8_t PotResistance[3] = {OpCode, LSB, MSB};
 
       FitnessMachineControlPointCharacteristic.writeValue(PotResistance, 3); // 04E8030 100%
+      */
+      
       /*if (ResistanceSupport != ResistanceChange) {
         FitnessMachineControlPointCharacteristic.writeValue(PotResistance, 3); // 04E8030 100%
         ResistanceChange = ResistanceSupport;
