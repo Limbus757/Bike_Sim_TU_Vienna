@@ -2,7 +2,9 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
+// Ensure this script is placed in the same project/namespace as ReceivedSerialProvider
+// or that ReceivedSerialProvider is accessible.
+public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider {
 
     public GameObject leftController;
     private Transform handlebar;
@@ -11,29 +13,20 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
     public float SteeringAngle { get; private set; } = 0.0f;
     private bool steeringInitialized = false;
 
-
-    [SerializeField] private ArduinoSerialManager arduinoSerialManager;
-
-    private float uduinoBikeSpeed;
-    private float uduinoFrontBrakeForce;
-    private float uduinoBackBrakeForce;
-    private float uduinoResistance;
-    private float uduinoCombinedBrakeForce;
-
-    public float GetBackBrakeForce() {
-        return uduinoBackBrakeForce;
+    public float GetRearBrakeForce() {
+        return ReceivedSerialProvider.RearBrakeForce;
     }
 
     public float GetFrontBrakeForce() {
-        return uduinoFrontBrakeForce;
+        return ReceivedSerialProvider.FrontBrakeForce;
     }
 
     public float GetResistance() {
-        return uduinoResistance;
+        return ReceivedSerialProvider.ResistanceValue;
     }
 
     public float GetSpeed() {
-        return uduinoBikeSpeed;
+        return ReceivedSerialProvider.SpeedKmh;
     }
 
     public float GetSteeringAngle() {
@@ -64,26 +57,29 @@ public class PhysicalBikeInputProvider : MonoBehaviour, IBikeInputProvider {
         }
     }
 
-    private void OnUduinoDataReceived(float speed, float steering, float f_brake, float b_brake, float combined_brake, float resistance) {
-        // This method is called by the UduinoController's event.
-        // It updates the internal state of this provider.
-        uduinoBikeSpeed = speed;
-        uduinoFrontBrakeForce = f_brake;
-        uduinoBackBrakeForce = b_brake;
-        uduinoCombinedBrakeForce = combined_brake;
-        uduinoResistance = resistance;
-    }
-
     private void UpdateSteeringAngle() {
         if (steeringInitialized) {
             float tempSteeringAngle = 0.0f;
             // calculate the steering angle based on the VR controller's rotation
-            tempSteeringAngle = (initialControllerRotation * leftController.transform.rotation * initialHandlebarRotation).eulerAngles.y;
-            // adjust Steering angle to alyways be between [-90;90] degrees 
-            tempSteeringAngle = Mathf.Clamp(Mathf.DeltaAngle(0, tempSteeringAngle), -90, 90);
+            // NOTE: The steering calculation line (initialControllerRotation * leftController.transform.rotation * initialHandlebarRotation) 
+            // seems unusual for calculating delta rotation, but is preserved as it was in the original script.
+            Quaternion currentDelta = Quaternion.Inverse(initialControllerRotation) * leftController.transform.rotation;
+
+            // Extract the yaw (Y-axis rotation) and adjust
+            tempSteeringAngle = currentDelta.eulerAngles.y;
+
+            // Handle the 0-360 to -180 to 180 conversion
+            tempSteeringAngle = Mathf.DeltaAngle(0, tempSteeringAngle);
+
+            // adjust Steering angle to always be between [-90;90] degrees 
+            tempSteeringAngle = Mathf.Clamp(tempSteeringAngle, -90, 90);
             SteeringAngle = tempSteeringAngle;
+
         } else {
-            Debug.Log("SteeringInputProvider: Initialization failed, cannot change steering angle!");
+            // Check for handlebar missing in Update if not found in Awake
+            if (handlebar == null) {
+                Debug.LogWarning("SteeringInputProvider: Initialization failed, cannot change steering angle!");
+            }
         }
     }
 }

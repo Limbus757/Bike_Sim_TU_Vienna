@@ -22,7 +22,7 @@ public class GamepadInputProvider : MonoBehaviour, IBikeInputProvider
         return Input.GetAxis("LeftTrigger") * gamepadBrakeSensitivity /2;
     }
 
-    public float GetBackBrakeForce() {
+    public float GetRearBrakeForce() {
         return Input.GetAxis("LeftTrigger") * gamepadBrakeSensitivity /2;
     }
 

@@ -84,7 +84,7 @@ public class BikeController : MonoBehaviour {
     private void FetchInputProvider() {
         switch (currentInputMode) {
             case InputMode.Microcontroller:
-                inputProvider = GetComponent<PhysicalBikeInputProvider>();
+                inputProvider = GetComponent<SimulatorInputProvider>();
                 break;
             case InputMode.Gamepad:
                 // Assuming you have a GamepadInput class that implements IBikeInputProvider
@@ -108,7 +108,7 @@ public class BikeController : MonoBehaviour {
         SteeringAngle = inputProvider.GetSteeringAngle();
         BikeSpeed = inputProvider.GetSpeed();
         FrontBrakeforce = inputProvider.GetFrontBrakeForce();
-        BackBrakeforce = inputProvider.GetBackBrakeForce();
+        BackBrakeforce = inputProvider.GetRearBrakeForce();
     }
 
     private void ApplyBikeAcceleration(Rigidbody rigidBody) {

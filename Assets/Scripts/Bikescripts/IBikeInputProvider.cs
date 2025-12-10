@@ -12,8 +12,9 @@ public interface IBikeInputProvider
 
     // Gets the current front brake force input.
     float GetFrontBrakeForce();
+
     // Gets the current front brake force input.
-    float GetBackBrakeForce();
+    float GetRearBrakeForce();
 
     // Gets the current resistance input.
     float GetResistance();
