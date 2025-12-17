@@ -1,13 +1,12 @@
 /*
- * ESP32-S3 CODE: BLE Central, Brake Input, PC TX (Globals Version)
+ * ESP32-S3 CODE: BLE Central, Brake Input, PC TX
  * 
  * Role: 
- * - Connects to Tacx BLE Trainer (FTMS)
  * - Reads brake and switch sensors locally
  * - Calculates resistance and sends control over BLE
  * - Streams telemetry to PC at 50 Hz (TX only)
  * 
- * LED Status (rgbLedWrite on RGB_BUILTIN):
+ * LED Status:
  * - Red: Scanning / Disconnected
  * - Blue: Connecting
  * - Green: Fully Ready (Control Active)
@@ -27,7 +26,7 @@
 #define LKA_SWITCH_PIN 2
 
 // --- LED Control ---
-#define RGB_BUILTIN     48
+#define RGB_BUILTIN     48+--
 #define RGB_BRIGHTNESS  255
 
 // --- BLE Constants ---
