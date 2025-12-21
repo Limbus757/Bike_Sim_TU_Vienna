@@ -36,7 +36,7 @@ bool configureDrv2605One(int enPin) {
   return true;
 }
 
-// Setzt beide PWM-Werte (0..255)
+
 void setPWM(uint8_t left, uint8_t right) {
   analogWrite(PWM_LEFT,  left);
   analogWrite(PWM_RIGHT, right);
