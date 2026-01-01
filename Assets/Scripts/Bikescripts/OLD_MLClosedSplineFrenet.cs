@@ -77,8 +77,7 @@ public class MLClosedSplineFrenet : MonoBehaviour
         // forciere "geschlossen": verbinde N->0 in Längenlogik implizit über Wrap bei Projektion
         lastBestK = 0;
     }*/
-    void Bake()
-    {
+    void Bake() {
         if (centerLine == null) return;
 
         var spline = centerLine.Splines[splineIndex];
@@ -114,8 +113,7 @@ public class MLClosedSplineFrenet : MonoBehaviour
         lastBestK = 0;
     }
 
-    void Update()
-    {
+    void Update() {
         if (centerLine == null || bike == null || pts == null || pts.Length == 0) return;
 
         if (useGroundNormal)
@@ -126,10 +124,7 @@ public class MLClosedSplineFrenet : MonoBehaviour
         EvaluateAt(bike.position, roadUp, out crossTrackError, out s, out nearestPoint, out tangent, out headingErrorDeg);
     }
 
-    void EvaluateAt(Vector3 pos, Vector3 up,
-                    out float ey, out float sOut,
-                    out Vector3 pStar, out Vector3 tHat, out float hdgErrDeg)
-    {
+    void EvaluateAt(Vector3 pos, Vector3 up, out float ey, out float sOut, out Vector3 pStar, out Vector3 tHat, out float hdgErrDeg) {
         // 1) Lokale Suche um lastBestK mit Wrap
         int bestK = lastBestK;
         float bestDist2 = float.MaxValue;
@@ -180,8 +175,8 @@ public class MLClosedSplineFrenet : MonoBehaviour
         hdgErrDeg = Vector3.SignedAngle(fwd, tPlanar, up);
     }
 
-    Vector3 SampleGroundUp(Vector3 origin)
-    {
+
+    Vector3 SampleGroundUp(Vector3 origin) {
         if (Physics.Raycast(origin + Vector3.up * 2f, Vector3.down, out var hit, 5f, groundMask))
             return hit.normal.normalized;
         return Vector3.up;

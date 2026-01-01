@@ -1,98 +1,92 @@
 using UnityEngine;
-using UnityEngine.Splines;
 
-/// <summary>
-/// A PID-based Lane Keeping Assist system that calculates a steering correction
-/// to keep an object aligned with a spline. This script must be attached
-/// to the same GameObject as the BikeController.
-/// </summary>
 public class LaneKeepingAssist : MonoBehaviour {
+    [Header("Script References")]
+    public MLClosedSplineFrenet frenetSource;
+    private BikeController bikeController;
+
+    [Header("LKA Status (Public)")]
+    [Tooltip("Reflects the physical switch state from the Serial Provider.")]
+    public bool lkaSwitchActive;
+    [Tooltip("True if the PID is actually sending a correction signal above the deadzone.")]
+    public bool isEngaged = false;
+
+    [Header("LKA Motor Outputs")]
+    public bool motorDirection = true;
+    public int motorPWM = 26; // Default to 10% (255 * 0.1)
+
     [Header("PID Controller Gains")]
-    [Tooltip("Proportional gain. Controls the response to the current error.")]
-    public float Kp = 2.0f;
-    [Tooltip("Integral gain. Reduces steady-state error by accumulating past error.")]
-    public float Ki = 0.5f;
-    [Tooltip("Derivative gain. Dampens oscillations by predicting future error.")]
-    public float Kd = 0.2f;
+    public float Kp = 10.0f;
+    public float Ki = 0.1f;
+    public float Kd = 1.0f;
 
     [Header("LKA Parameters")]
-    [Tooltip("The 'dead zone' distance from the spline center where no correction is applied.")]
-    public float lkaDeadZone = 0.5f;
-    [Tooltip("A multiplier that weights the heading error relative to the lateral error.")]
-    public float headingErrorGain = 2.0f;
-    [Tooltip("The maximum allowed correction angle to prevent over-steering.")]
-    public float maxAngleCorrection = 30f;
+    public float lkaDeadZone = 0.3f;
+    public float headingErrorGain = 1.5f;
+    public float minSpeedToEngage = 2.0f;
 
-    [Header("Inspectable Variables (Read-Only)")]
-    [Tooltip("The current deviation distance from the spline center.")]
-    public float Deviation;
-    [Tooltip("The angle difference between the bike's forward vector and the spline's tangent.")]
-    public float HeadingError;
-    [Tooltip("The current calculated error for the PID controller.")]
+    [Header("Live PID Debug")]
     public float CurrentError;
-
-    // Internal PID state variables
     private float integralError = 0f;
     private float lastError = 0f;
 
-    private SplineContainer trackSpline;
-    private GameController gameController;
+    private const int MIN_PWM = 26;  // 10% of 255
+    private const int MAX_PWM = 230; // 90% of 255
 
     void Awake() {
-        gameController = FindObjectOfType<GameController>();
-        if (gameController == null) {
-            Debug.LogError("LKA: GameController not found in the scene. LKA cannot be initialized.");
-        }
+        bikeController = GetComponent<BikeController>();
+        if (frenetSource == null) frenetSource = GetComponent<MLClosedSplineFrenet>();
     }
 
-    public float UpdateCorrection(Transform bikeTransform) {
-        if (gameController != null) {
-            // trackSpline = gameController.course;
+    public void UpdateCorrection() {
+        // 1. Full Cutoff Switch Logic
+        // Pull the static variable from the Serial Provider
+        lkaSwitchActive = ReceivedSerialProvider.LkaSwitchState;
+
+        if (!lkaSwitchActive) {
+            StopMotor();
+            return;
         }
 
-        // 1. Find the closest point on the spline and calculate deviation.
-        float normalizedT = 0;
-        Vector3 closestPoint = new Vector3(0, 0, 0); //SplineUtility.GetNearestPoint(trackSpline.Spline, bikeTransform.position, out normalizedT);
-        Vector3 splineTangent = SplineUtility.EvaluateTangent(trackSpline.Spline, normalizedT);
-
-        Vector3 deviationVector = bikeTransform.position - closestPoint;
-        deviationVector.y = 0; // Ignore vertical deviation
-
-        Deviation = deviationVector.magnitude;
-
-        // 2. Determine the direction of the error and calculate lateral error.
-        Vector3 splineRight = Vector3.Cross(splineTangent, Vector3.up).normalized;
-        float side = Vector3.Dot(deviationVector.normalized, splineRight);
-        float lateralError = side * (Deviation - lkaDeadZone);
-
-        // 3. Calculate heading error (angle between bike's forward and spline's tangent)
-        Vector3 bikeForward = bikeTransform.forward;
-        HeadingError = Vector3.SignedAngle(bikeForward, splineTangent, Vector3.up);
-
-        // 4. Check for the dead zone. If inside, reset state and return 0.
-        if (Deviation < lkaDeadZone) {
-            integralError = 0f; // Reset integral term in the dead zone.
-            lastError = 0f;
-            CurrentError = 0f;
-            return 0f;
+        // 2. Safety Checks (Source & Speed)
+        if (frenetSource == null || bikeController == null || bikeController.BikeSpeed < minSpeedToEngage) {
+            StopMotor();
+            return;
         }
 
-        // 5. Calculate the combined error for PID
-        CurrentError = lateralError + (HeadingError * headingErrorGain);
+        float deviation = frenetSource.crossTrackError;
 
-        // 6. Calculate PID components.
-        float proportionalTerm = Kp * CurrentError;
+        // 3. Dead Zone Check
+        if (Mathf.Abs(deviation) < lkaDeadZone) {
+            StopMotor();
+            return;
+        }
 
+        // If we reached here, LKA is officially active and correcting
+        isEngaged = true;
+
+        CurrentError = deviation + (frenetSource.headingErrorDeg * (headingErrorGain * 0.01f));
+
+        // PID Logic
+        float p = Kp * CurrentError;
         integralError += CurrentError * Time.deltaTime;
-        float integralTerm = Ki * integralError;
-
-        float derivativeTerm = Kd * ((CurrentError - lastError) / Time.deltaTime);
+        float i = Ki * integralError;
+        float d = Kd * ((CurrentError - lastError) / Time.deltaTime);
         lastError = CurrentError;
 
-        // 7. Calculate final correction.
-        float totalCorrection = proportionalTerm + integralTerm + derivativeTerm;
+        float rawOutput = p + i + d;
 
-        // 8. Clamp the correction to prevent extreme steering.
-        return Mathf.Clamp(totalCorrection, -maxAngleCorrection, maxAngleCorrection);
+        motorDirection = rawOutput > 0;
+
+        // Map and Clamp PWM
+        int calculatedPWM = Mathf.RoundToInt(Mathf.Abs(rawOutput));
+        motorPWM = Mathf.Clamp(calculatedPWM, MIN_PWM, MAX_PWM);
+    }
+
+    private void StopMotor() {
+        isEngaged = false;
+        motorPWM = MIN_PWM; // Idle at 10% PWM
+        integralError = 0;
+        lastError = 0;
     }
 }
