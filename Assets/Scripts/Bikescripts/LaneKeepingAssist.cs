@@ -5,15 +5,19 @@ public class LaneKeepingAssist : MonoBehaviour {
     public MLClosedSplineFrenet frenetSource;
     private BikeController bikeController;
 
+    [Header("Visual Indicator (Handlebar Bulb)")]
+    [Tooltip("The small sphere mesh on the handlebar.")]
+    public Renderer bulbRenderer;
+    [Tooltip("The Point Light inside the sphere.")]
+    public Light handlebarLight;
+
     [Header("LKA Status (Public)")]
-    [Tooltip("Reflects the physical switch state from the Serial Provider.")]
     public bool lkaSwitchActive;
-    [Tooltip("True if the PID is actually sending a correction signal above the deadzone.")]
     public bool isEngaged = false;
 
     [Header("LKA Motor Outputs")]
-    public bool motorDirection = true;
-    public int motorPWM = 26; // Default to 10% (255 * 0.1)
+    public bool motorDirection = true; // true = Right, false = Left
+    public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
     public float Kp = 10.0f;
@@ -30,8 +34,8 @@ public class LaneKeepingAssist : MonoBehaviour {
     private float integralError = 0f;
     private float lastError = 0f;
 
-    private const int MIN_PWM = 26;  // 10% of 255
-    private const int MAX_PWM = 230; // 90% of 255
+    private const int MIN_PWM = 26;
+    private const int MAX_PWM = 230;
 
     void Awake() {
         bikeController = GetComponent<BikeController>();
@@ -39,31 +43,32 @@ public class LaneKeepingAssist : MonoBehaviour {
     }
 
     public void UpdateCorrection() {
-        // 1. Full Cutoff Switch Logic
-        // Pull the static variable from the Serial Provider
         lkaSwitchActive = ReceivedSerialProvider.LkaSwitchState;
 
-        if (!lkaSwitchActive) {
-            StopMotor();
-            return;
-        }
+        // Condition check for engagement
+        bool canEngage = lkaSwitchActive &&
+                         frenetSource != null &&
+                         bikeController != null &&
+                         bikeController.BikeSpeed >= minSpeedToEngage;
 
-        // 2. Safety Checks (Source & Speed)
-        if (frenetSource == null || bikeController == null || bikeController.BikeSpeed < minSpeedToEngage) {
+        if (!canEngage) {
+            UpdateVisuals(Color.red, false);
             StopMotor();
             return;
         }
 
         float deviation = frenetSource.crossTrackError;
 
-        // 3. Dead Zone Check
+        // Dead Zone check
         if (Mathf.Abs(deviation) < lkaDeadZone) {
+            UpdateVisuals(Color.red, false);
             StopMotor();
             return;
         }
 
-        // If we reached here, LKA is officially active and correcting
+        // --- ACTIVE ENGAGEMENT ---
         isEngaged = true;
+        UpdateVisuals(Color.green, true);
 
         CurrentError = deviation + (frenetSource.headingErrorDeg * (headingErrorGain * 0.01f));
 
@@ -75,17 +80,28 @@ public class LaneKeepingAssist : MonoBehaviour {
         lastError = CurrentError;
 
         float rawOutput = p + i + d;
-
         motorDirection = rawOutput > 0;
+        motorPWM = Mathf.Clamp(Mathf.RoundToInt(Mathf.Abs(rawOutput)), MIN_PWM, MAX_PWM);
+    }
 
-        // Map and Clamp PWM
-        int calculatedPWM = Mathf.RoundToInt(Mathf.Abs(rawOutput));
-        motorPWM = Mathf.Clamp(calculatedPWM, MIN_PWM, MAX_PWM);
+    private void UpdateVisuals(Color col, bool active) {
+        // Change the color of the sphere bulb
+        if (bulbRenderer != null) {
+            bulbRenderer.material.color = col;
+            // Optional: make it "glow" using Emission if your material supports it
+            bulbRenderer.material.SetColor("_EmissionColor", col * (active ? 2f : 0.5f));
+        }
+
+        // Set the light color and brightness
+        if (handlebarLight != null) {
+            handlebarLight.color = col;
+            handlebarLight.intensity = active ? 2.0f : 0.5f; // Dimmer when red/inactive
+        }
     }
 
     private void StopMotor() {
         isEngaged = false;
-        motorPWM = MIN_PWM; // Idle at 10% PWM
+        motorPWM = MIN_PWM;
         integralError = 0;
         lastError = 0;
     }

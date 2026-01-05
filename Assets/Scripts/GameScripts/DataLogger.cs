@@ -64,9 +64,9 @@ public class DataLogger : MonoBehaviour {
 
         // LKA Hardware Switch State
         line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(",");
+
         // LKA Software Engagement (Active Steering)
         line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
-
         line.Append(lkaController.motorDirection ? "1" : "0").Append(",");
         line.Append(lkaController.motorPWM).Append(",");
 

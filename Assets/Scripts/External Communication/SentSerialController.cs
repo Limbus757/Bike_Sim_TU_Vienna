@@ -7,41 +7,10 @@ using System.Globalization;
 
 /// <summary>
 /// Handles one-way serial communication (Write Only) to an external device.
-/// It sends 5 motor control values on a separate thread at a fixed interval (50 Hz).
+/// It sends 5 motor control values on a separate thread at a fixed configurable interval.
 /// </summary>
-public class SentSerialController : MonoBehaviour {
-    // =========================================================================
-    // --- Public Control Data Inputs ---
-    // --- These are the 5 values sent to the receiving Arduino.
-    // --- OTHER SCRIPTS MUST WRITE TO THESE FIELDS to update the serial output.
-    // =========================================================================
-
-    [Header("3. Motor Control Outputs (Set by other Scripts)")]
-    [Tooltip("Value for the Direction Pin (0 or 1).")]
-    [Range(0, 1)]
-    public int DirectionPinValue = 0; // R, Index 0 (Digital)
-
-    [Tooltip("Value for the Enable Pin (0 or 1).")]
-    [Range(0, 1)]
-    public int EnablePinValue = 0;    // R, Index 1 (Digital)
-
-    [Tooltip("PWM Value for the main speed control (0-255).")]
-    [Range(0, 255)]
-    public int PwmPin1Value = 0;      // R, Index 2 (Analog/PWM)
-
-    [Tooltip("PWM Value for a secondary control (0-255).")]
-    [Range(0, 255)]
-    public int PwmPin2Value = 0;      // R, Index 3 (Analog/PWM)
-
-    [Tooltip("PWM Value for a third control (0-255).")]
-    [Range(0, 255)]
-    public int PwmPin3Value = 0;      // R, Index 4 (Analog/PWM)
-
-
-    // =========================================================================
+public class SentSerialController : MonoBehaviour { 
     // --- Configuration & Debug Fields ---
-    // =========================================================================
-
     [Header("1. Settings")]
     [Tooltip("The name of the serial port (e.g., COM3 on Windows).")]
     public string portName = "COM3";
@@ -59,10 +28,26 @@ public class SentSerialController : MonoBehaviour {
     [Tooltip("Actual period (in ms) of the sending thread.")]
     public uint actualSendPeriodMs = 0;
 
+    // --- Public Control Data Inputs ---
+    // --- These are the 5 values sent to the receiving Arduino.
+    // --- OTHER SCRIPTS MUST WRITE TO THESE FIELDS to update the serial output.
+    [Header("3. Motor Control Outputs (Set by other Scripts)")]
+    [Tooltip("Value for the Direction Pin (0 or 1).")]
+    public int DirectionPinValue = 0;
 
-    // =========================================================================
+    [Tooltip("Value for the Enable Pin (0 or 1).")]
+    public int EnablePinValue = 0;
+
+    [Tooltip("PWM Value for the main speed control (0-255).")]
+    public int PwmPin1Value = 0;
+
+    [Tooltip("PWM Value for a secondary control (0-255).")]
+    public int PwmPin2Value = 0;
+
+    [Tooltip("PWM Value for a third control (0-255).")]
+    public int PwmPin3Value = 0;
+
     // --- Private Fields ---
-    // =========================================================================
     private SerialPort serialPort;
     private Thread writeThread;
     private bool isWriting = false;
