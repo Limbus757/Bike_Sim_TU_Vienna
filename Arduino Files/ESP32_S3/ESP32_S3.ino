@@ -21,12 +21,12 @@
 #define PC_SEND_INTERVAL_MS    20      // 50 Hz
 
 // --- ESP32 Sensor Pins ---
-#define FRONTBRAKE_PIN 36
-#define REARBRAKE_PIN  39
-#define LKA_SWITCH_PIN 2
+#define FRONTBRAKE_PIN 1
+#define REARBRAKE_PIN  2
+#define LKA_SWITCH_PIN 5
 
 // --- LED Control ---
-#define RGB_BUILTIN     48+--
+#define RGB_BUILTIN     48
 #define RGB_BRIGHTNESS  255
 
 // --- BLE Constants ---
@@ -50,7 +50,7 @@ volatile float speedf = 0.0;
 volatile float frontBrakeForce = 0.0;
 volatile float rearBrakeForce  = 0.0;
 volatile bool  lkaSwitchState  = false;
-volatile float resistanceValue = 0.0;
+volatile uint16_t resistanceValue = 0;
 volatile uint32_t bleActualPeriodMs    = 0;
 volatile uint32_t serialActualPeriodMs = 0;
 
@@ -71,15 +71,13 @@ SensorReadings readSensorInputs() {
 
     readings.frontBrake = map(rawFB, 0, 4095, 0, 100);
     readings.rearBrake  = map(rawRB, 0, 4095, 0, 100);
-    readings.lkaSwitch  = (digitalRead(LKA_SWITCH_PIN) == LOW);
-
+    readings.lkaSwitch = (digitalRead(LKA_SWITCH_PIN) == HIGH);
     return readings;
 }
 
-float calculateResistance(float speed, float f_brake, float r_brake) {
+uint16_t calculateResistance(float f_brake, float r_brake) {
     float totalBrake = f_brake + r_brake;
-    float res = (totalBrake / 200.0f) * 10.0f;
-    return constrain(res, 0.0f, 10.0f);
+    return map(totalBrake, 0.0, 200.0, 0, 1000);
 }
 
 // -----------------------------------------------------------
@@ -117,14 +115,13 @@ class ClientCallbacks : public NimBLEClientCallbacks {
 // -----------------------------------------------------------
 // BLE CONTROL FUNCTIONS
 // -----------------------------------------------------------
-void writeResistanceToTacx(float res) {
+void writeResistanceToTacx(uint16_t res) {
     if (!bleConnected || !fCPinit || !pControlPointChar || !pControlPointChar->canWrite())
         return;
-
-    long rawRes = (long)(res * 40.0f);
-    rawRes = constrain(rawRes, 0L, 65535L);
-    uint8_t payload[3] = { 0x04, (uint8_t)(rawRes & 0xFF), (uint8_t)((rawRes >> 8) & 0xFF) };
-    pControlPointChar->writeValue(payload, 3, false);
+    
+    res = constrain(res, 0L, 65535L);
+    uint8_t payload[3] = { 0x04, (uint8_t)(res & 0xFF), (uint8_t)((res >> 8) & 0xFF) };
+    pControlPointChar->writeValue(payload, 3, true);
 }
 
 void initFitnessMachineControlPoint() {
@@ -135,7 +132,7 @@ void initFitnessMachineControlPoint() {
 
     if (pControlPointChar->writeValue(startCmd, 1, true)) {
         vTaskDelay(pdMS_TO_TICKS(100));
-        writeResistanceToTacx(0.0);
+        writeResistanceToTacx(0);
         fCPinit = true;
         rgbLedWrite(RGB_BUILTIN, 0, RGB_BRIGHTNESS, 0); // Green
         Serial.println("[BLE] FMCP initialized.");
@@ -151,7 +148,7 @@ void connectToTacx() {
     pScan->setActiveScan(true);
 
     Serial.println("[BLE] Scanning for Tacx device...");
-    pScan->start(10, false);
+    pScan->start(10, true);
     NimBLEScanResults results = pScan->getResults();
 
     NimBLEAdvertisedDevice* advDevice = nullptr;
@@ -229,7 +226,7 @@ void bluetoothTask(void *pvParameters) {
                 xSemaphoreGive(xSensorMutex);
             }
 
-            float newRes = calculateResistance(localSpeed, inputs.frontBrake, inputs.rearBrake);
+            float newRes = calculateResistance(inputs.frontBrake, inputs.rearBrake);
 
             if (xSemaphoreTake(xSensorMutex, portMAX_DELAY) == pdTRUE) {
                 resistanceValue = newRes;
@@ -298,7 +295,7 @@ void setup() {
 
     pinMode(FRONTBRAKE_PIN, INPUT);
     pinMode(REARBRAKE_PIN, INPUT);
-    pinMode(LKA_SWITCH_PIN, INPUT_PULLUP);
+    pinMode(LKA_SWITCH_PIN, INPUT_PULLDOWN);
 
     Serial.println("[SYSTEM] Initializing NimBLE...");
     NimBLEDevice::init("");
