@@ -128,16 +128,27 @@ void initFitnessMachineControlPoint() {
     if (!pControlPointChar || fCPinit) return;
 
     Serial.println("[BLE] Initializing FMCP...");
-    uint8_t startCmd[] = {0x07};
 
+    // Send Request Control (0x00)
+    uint8_t requestControl[] = {0x00};
+    if (pControlPointChar->writeValue(requestControl, 1, true)) {
+        Serial.println("[BLE] Request Control sent.");
+        vTaskDelay(pdMS_TO_TICKS(200)); 
+    }
+
+    // Send Start Training (0x07)
+    uint8_t startCmd[] = {0x07};
     if (pControlPointChar->writeValue(startCmd, 1, true)) {
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(200));
+        
+        // Set initial resistance to 0 
         writeResistanceToTacx(0);
+        
         fCPinit = true;
-        rgbLedWrite(RGB_BUILTIN, 0, RGB_BRIGHTNESS, 0); // Green
-        Serial.println("[BLE] FMCP initialized.");
+        rgbLedWrite(RGB_BUILTIN, 0, RGB_BRIGHTNESS, 0); // Green 
+        Serial.println("[BLE] FMCP fully initialized and started.");
     } else {
-        Serial.println("[BLE ERR] FMCP init failed.");
+        Serial.println("[BLE ERR] FMCP start failed.");
     }
 }
 
