@@ -8,7 +8,7 @@ using System;
 /// - s (0..totalLength)
 /// - headingErrorDeg
 /// </summary>
-public class MLClosedSplineFrenet : MonoBehaviour
+public class MLClosedSplineFrenet_old: MonoBehaviour
 {
     [Header("Input")]
     public Transform bike;

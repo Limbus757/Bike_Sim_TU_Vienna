@@ -7,7 +7,7 @@ public class DataLogger : MonoBehaviour {
     private BikeController bikeController;
     private LaneKeepingAssist lkaController;
     private GameController gameController;
-    private MLClosedSplineFrenetNew frenetController;
+    private MLClosedSplineFrenet frenetController;
 
     private string filePath;
     private bool isLogging = false;
@@ -22,7 +22,7 @@ public class DataLogger : MonoBehaviour {
     void Awake() {
         bikeController = GetComponent<BikeController>();
         lkaController = GetComponent<LaneKeepingAssist>();
-        frenetController = GetComponent<MLClosedSplineFrenetNew>();
+        frenetController = GetComponent<MLClosedSplineFrenet>();
         gameController = FindObjectOfType<GameController>();
     }
 
