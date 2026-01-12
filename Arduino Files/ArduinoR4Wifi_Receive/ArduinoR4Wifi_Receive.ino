@@ -2,9 +2,9 @@
 #include <Adafruit_DRV2605.h>
 
 // --- PIN DEFINITIONS: STEERING MOTOR ---
-const int STE_ENABLE_PIN = 8;    
+const int STE_ENABLE_PIN = 10;    
 const int STE_DIRECTION_PIN = 9; 
-const int STE_PWM_PIN = 10;      
+const int STE_PWM_PIN = 8;      
 
 // --- PIN DEFINITIONS: HAPTIC DRIVERS ---
 const int VIB_EN_LEFT = 6;       
