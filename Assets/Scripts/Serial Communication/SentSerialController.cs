@@ -70,10 +70,7 @@ public class SentSerialController : MonoBehaviour
 
     void Update()
     {
-        // 1. Read public fields from LKA and prepare the message string buffer.
         PrepareMessageBuffer();
-
-        // 2. Update the inspector display for the user to see what is about to be sent.
         lock (_writeLock)
         {
             lastSentString = _latestMessageToSend;
@@ -82,21 +79,15 @@ public class SentSerialController : MonoBehaviour
 
     /// <summary>
     /// Collects data from LaneKeepingAssist, updates local fields, and formats the serial command.
-    /// Format: R,Dir,Enable,PWM1,PWM2,PWM3\n
     /// </summary>
     private void PrepareMessageBuffer() {
         if (laneKeepingAssist != null) {
-            // Direction: Read LKA's calculated direction
+            // Read LKA values
             SteeringDirPinValue = laneKeepingAssist.motorDirection ? 1 : 0;
-
-            // Enable: Read LKA's active correction status (isEngaged)
-            // Enable = 1 ONLY when the LKA is actively correcting (PID output is outside dead zone).
-            SteeringENPinValue = laneKeepingAssist.isEngaged ? 1 : 0;
-
-            // PWM1 (LKA Motor Speed): Read LKA's clamped PWM value
+            SteeringENPinValue = laneKeepingAssist.isEngaged ? 1 : 0; // Enable = 1 ONLY when the LKA is actively correcting (PID output is outside dead zone)
             SteeringPWMPinValue = laneKeepingAssist.motorPWM;
 
-            //Placeholder PWM pins to default zero
+            //Placeholder PWM pins for Handlebar vibration Motors
             VibrationPMWValueLeft = DEFAULT_PWM_UNUSED;
             VibrationPMWValueRight = DEFAULT_PWM_UNUSED;
         }
@@ -121,8 +112,7 @@ public class SentSerialController : MonoBehaviour
     /// <summary>
     /// Initializes and starts the background thread for serial communication.
     /// </summary>
-    private void StartSerialThread()
-    {
+    private void StartSerialThread() {
         isWriting = true;
         writeThread = new Thread(WriteData);
         writeThread.Start();
@@ -131,10 +121,8 @@ public class SentSerialController : MonoBehaviour
     /// <summary>
     /// The main loop for the writing thread.
     /// </summary>
-    private void WriteData()
-    {
-        try
-        {
+    private void WriteData() {
+        try {
             serialPort = new SerialPort(portName, baudRate);
             serialPort.NewLine = "\n";
             serialPort.Open();
@@ -162,34 +150,22 @@ public class SentSerialController : MonoBehaviour
 
                 Thread.Sleep(sendIntervalMs);
             }
-        }
-        catch (Exception e)
-        {
+        } catch (Exception e) {
             Debug.LogError($"[Serial TX Error] Write failed or port error: {e.Message}");
-        }
-        finally
-        {
-            if (serialPort != null && serialPort.IsOpen)
-            {
+        } finally {
+            if (serialPort != null && serialPort.IsOpen) {
                 serialPort.Close();
                 Debug.Log("[Serial TX] Port closed.");
             }
         }
     }
 
-    // --- Cleanup Methods ---
-    void OnDestroy()
-    {
-        StopSerialThread();
-    }
+    // Cleanup Methods
+    void OnDestroy() { StopSerialThread(); }
 
-    void OnApplicationQuit()
-    {
-        StopSerialThread();
-    }
+    void OnApplicationQuit() { StopSerialThread(); }
 
-    private void StopSerialThread()
-    {
+    private void StopSerialThread() {
         isWriting = false;
         if (writeThread != null && writeThread.IsAlive)
         {
