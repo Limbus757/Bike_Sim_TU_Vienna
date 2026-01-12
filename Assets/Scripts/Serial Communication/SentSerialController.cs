@@ -1,15 +1,22 @@
 using UnityEngine;
 using System.IO.Ports;
 using System.Threading;
-using System.Collections.Generic;
-using System;
 using System.Globalization;
+using System;
 
 /// <summary>
 /// Handles one-way serial communication (Write Only) to an external device.
-/// It sends 5 motor control values on a separate thread at a fixed configurable interval.
+/// It collects motor control values from the LaneKeepingAssist script and sends them 
+/// on a separate thread at a fixed configurable interval.
 /// </summary>
-public class SentSerialController : MonoBehaviour { 
+public class SentSerialController : MonoBehaviour
+{
+
+    // --- Data Source ---
+    [Header("0. Data Source")]
+    [Tooltip("The LaneKeepingAssist script that determines the motor control values.")]
+    public LaneKeepingAssist laneKeepingAssist;
+
     // --- Configuration & Debug Fields ---
     [Header("1. Settings")]
     [Tooltip("The name of the serial port (e.g., COM3 on Windows).")]
@@ -28,24 +35,23 @@ public class SentSerialController : MonoBehaviour {
     [Tooltip("Actual period (in ms) of the sending thread.")]
     public uint actualSendPeriodMs = 0;
 
-    // --- Public Control Data Inputs ---
-    // --- These are the 5 values sent to the receiving Arduino.
-    // --- OTHER SCRIPTS MUST WRITE TO THESE FIELDS to update the serial output.
-    [Header("3. Motor Control Outputs (Set by other Scripts)")]
-    [Tooltip("Value for the Direction Pin (0 or 1).")]
-    public int DirectionPinValue = 0;
+    // --- Control Outputs (Mapped to ESP32 Pins) ---
+    [Header("3. Steering Control Outputs")]
+    [Tooltip("Value for the Direction Pin (0=Left, 1=Right).")]
+    public int SteeringDirPinValue = 0;
 
-    [Tooltip("Value for the Enable Pin (0 or 1).")]
-    public int EnablePinValue = 0;
+    [Tooltip("Value for the Enable Pin (0=OFF, 1=ON/Active Correction).")]
+    public int SteeringENPinValue = 0;
 
-    [Tooltip("PWM Value for the main speed control (0-255).")]
-    public int PwmPin1Value = 0;
+    [Tooltip("PWM Value for the main speed control (MIN_PWM-MAX_PWM).")]
+    public int SteeringPWMPinValue = 0;
 
+    [Header("3. Vibration Control Outputs")]
     [Tooltip("PWM Value for a secondary control (0-255).")]
-    public int PwmPin2Value = 0;
+    public int VibrationPMWValueLeft = 0;
 
     [Tooltip("PWM Value for a third control (0-255).")]
-    public int PwmPin3Value = 0;
+    public int VibrationPMWValueRight = 0;
 
     // --- Private Fields ---
     private SerialPort serialPort;
@@ -54,39 +60,51 @@ public class SentSerialController : MonoBehaviour {
     private object _writeLock = new object();
     private string _latestMessageToSend = "";
 
-    void Awake() {
+    private const int DEFAULT_PWM_UNUSED = 0;
+
+    void Awake()
+    {
         Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
         StartSerialThread();
     }
 
-    void Update() {
-        // 1. Read public fields and prepare the message string buffer.
+    void Update()
+    {
         PrepareMessageBuffer();
-
-        // 2. Update the inspector display for the user to see what is about to be sent.
-        lock (_writeLock) {
+        lock (_writeLock)
+        {
             lastSentString = _latestMessageToSend;
         }
-
-        // The WriteData thread handles the actual transmission at the timed interval.
     }
 
     /// <summary>
-    /// Creates the comma-separated data string using current public inputs.
-    /// Format: R,Dir,Enable,PWM1,PWM2,PWM3
+    /// Collects data from LaneKeepingAssist, updates local fields, and formats the serial command.
     /// </summary>
     private void PrepareMessageBuffer() {
+        if (laneKeepingAssist != null) {
+            // Read LKA values
+            SteeringDirPinValue = laneKeepingAssist.motorDirection ? 1 : 0;
+            SteeringENPinValue = laneKeepingAssist.isEngaged ? 1 : 0; // Enable = 1 ONLY when the LKA is actively correcting (PID output is outside dead zone)
+            SteeringPWMPinValue = laneKeepingAssist.motorPWM;
+
+            //Placeholder PWM pins for Handlebar vibration Motors
+            VibrationPMWValueLeft = DEFAULT_PWM_UNUSED;
+            VibrationPMWValueRight = DEFAULT_PWM_UNUSED;
+        }
+
+        // We use 'R' for Request/Control Header
         string message = string.Format(
             CultureInfo.InvariantCulture,
-            "R,{0},{1},{2},{3},{4}",
-            DirectionPinValue,
-            EnablePinValue,
-            PwmPin1Value,
-            PwmPin2Value,
-            PwmPin3Value
-        );
+            "{0},{1},{2},{3},{4}\n", // New Format: 5 comma-separated values
+            SteeringDirPinValue,
+            SteeringENPinValue,
+            SteeringPWMPinValue,
+            VibrationPMWValueLeft,
+            VibrationPMWValueRight
+            );
 
-        lock (_writeLock) {
+        lock (_writeLock)
+        {
             _latestMessageToSend = message;
         }
     }
@@ -106,20 +124,24 @@ public class SentSerialController : MonoBehaviour {
     private void WriteData() {
         try {
             serialPort = new SerialPort(portName, baudRate);
+            serialPort.NewLine = "\n";
             serialPort.Open();
             Debug.Log($"[Serial TX] Opened port {portName} at {baudRate}. Starting write loop.");
 
             uint lastTime = (uint)Environment.TickCount;
 
-            while (isWriting) {
-                if (serialPort.IsOpen) {
+            while (isWriting)
+            {
+                if (serialPort.IsOpen)
+                {
                     string message;
-                    lock (_writeLock) {
-                        // Safely retrieve the latest prepared message from the main thread
+                    lock (_writeLock)
+                    {
                         message = _latestMessageToSend;
                     }
 
-                    serialPort.WriteLine(message);
+                    // Use Write() as the message already contains the newline character.
+                    serialPort.Write(message);
 
                     uint now = (uint)Environment.TickCount;
                     actualSendPeriodMs = now - lastTime;
@@ -138,18 +160,15 @@ public class SentSerialController : MonoBehaviour {
         }
     }
 
-    // --- Cleanup Methods ---
-    void OnDestroy() {
-        StopSerialThread();
-    }
+    // Cleanup Methods
+    void OnDestroy() { StopSerialThread(); }
 
-    void OnApplicationQuit() {
-        StopSerialThread();
-    }
+    void OnApplicationQuit() { StopSerialThread(); }
 
     private void StopSerialThread() {
         isWriting = false;
-        if (writeThread != null && writeThread.IsAlive) {
+        if (writeThread != null && writeThread.IsAlive)
+        {
             writeThread.Join(200);
         }
     }

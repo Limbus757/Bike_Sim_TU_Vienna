@@ -2,9 +2,9 @@
 #include <Adafruit_DRV2605.h>
 
 // --- PIN DEFINITIONS: STEERING MOTOR ---
-const int STE_ENABLE_PIN = 8;    
+const int STE_ENABLE_PIN = 10;    
 const int STE_DIRECTION_PIN = 9; 
-const int STE_PWM_PIN = 10;      
+const int STE_PWM_PIN = 8;      
 
 // --- PIN DEFINITIONS: HAPTIC DRIVERS ---
 const int VIB_EN_LEFT = 6;       
@@ -89,6 +89,7 @@ void setup() {
   setPinmodes();
   setSafeState(); // Ensure pins are in safe state on boot
 
+  /*
   if (!configureDrv2605One(VIB_EN_LEFT)) {
     Serial.println("DRV2605 Left Error");
     while (1); 
@@ -98,6 +99,7 @@ void setup() {
     Serial.println("DRV2605 Right Error");
     while (1);
   }
+  */
 
   // Keep both haptic drivers enabled for PWM operation
   digitalWrite(VIB_EN_LEFT, HIGH);
@@ -130,7 +132,9 @@ void loop() {
 
   // 2. Safety Timeout Logic
   // Only activates if firstDataReceived is true AND time has elapsed
+  /*
   if (firstDataReceived && (millis() - lastDataReceivedTime > TIMEOUT_THRESHOLD_MS)) {
     setSafeState();
   }
+  */
 }

@@ -121,7 +121,7 @@ void writeResistanceToTacx(uint16_t res) {
     
     res = constrain(res, 0L, 65535L);
     uint8_t payload[3] = { 0x04, (uint8_t)(res & 0xFF), (uint8_t)((res >> 8) & 0xFF) };
-    pControlPointChar->writeValue(payload, 3, true);
+    pControlPointChar->writeValue(payload, 3, false);
 }
 
 void initFitnessMachineControlPoint() {

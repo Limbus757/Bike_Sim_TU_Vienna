@@ -3,11 +3,12 @@ using UnityEngine;
 using System.IO;
 using System.Text;
 
-public class DataLogger : MonoBehaviour {
+public class DataLogger : MonoBehaviour
+{
     private BikeController bikeController;
     private LaneKeepingAssist lkaController;
     private GameController gameController;
-    private MLClosedSplineFrenetNew frenetController;
+    private MLClosedSplineFrenet frenetController;
 
     private string filePath;
     private bool isLogging = false;
@@ -19,17 +20,28 @@ public class DataLogger : MonoBehaviour {
 
     private const string END_OF_LOG_MARKER = "--- END OF LOG ---";
 
-    void Awake() {
+    void Awake()
+    {
         bikeController = GetComponent<BikeController>();
         lkaController = GetComponent<LaneKeepingAssist>();
-        frenetController = GetComponent<MLClosedSplineFrenetNew>();
+        frenetController = GetComponent<MLClosedSplineFrenet>();
         gameController = FindObjectOfType<GameController>();
     }
 
     void Start() {
+        string basePath = Application.dataPath;
+        
+        string studyName = (gameController != null) ? gameController.studyName : "DefaultStudy";
         string participantID = (gameController != null) ? gameController.studyParticipantId.ToString() : "0";
         string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        filePath = Path.Combine(Application.persistentDataPath, $"{participantID}_Log_{timestamp}.csv");
+        string studyFolderPath = Path.Combine(basePath, "Scripts", "Logging", studyName);
+
+        if (!Directory.Exists(studyFolderPath)) {
+            Directory.CreateDirectory(studyFolderPath);
+        }
+
+        string fileName = $"{participantID}_Log_{timestamp}.csv";
+        filePath = Path.Combine(studyFolderPath, fileName);
     }
 
     void FixedUpdate() {
@@ -39,20 +51,28 @@ public class DataLogger : MonoBehaviour {
     public void StartLogger() {
         if (isLogging) return;
         try {
+            if (!Directory.Exists(Path.GetDirectoryName(filePath)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+            }
+
             string metadata = $"{(gameController != null ? gameController.studyName : "Study")},{(gameController != null ? gameController.studyParticipantId.ToString() : "0")}\n";
             File.WriteAllText(filePath, metadata);
             File.AppendAllText(filePath, header + "\n");
             isLogging = true;
-        } catch (System.Exception e) { Debug.LogError("Logger Start Error: " + e.Message); }
+        }
+        catch (System.Exception e) { Debug.LogError("Logger Start Error: " + e.Message); }
     }
 
-    public void StopLogger() {
+    public void StopLogger()
+    {
         if (!isLogging) return;
         isLogging = false;
         try { File.AppendAllText(filePath, END_OF_LOG_MARKER + "\n"); } catch (System.Exception e) { Debug.LogError("Logger Stop Error: " + e.Message); }
     }
 
-    private void LogCurrentData() {
+    private void LogCurrentData()
+    {
         if (bikeController == null || lkaController == null || frenetController == null) return;
 
         StringBuilder line = new StringBuilder();
@@ -75,7 +95,7 @@ public class DataLogger : MonoBehaviour {
         line.Append(frenetController.crossTrackError.ToString("F4")).Append(",");
         line.Append(frenetController.headingErrorDeg.ToString("F4"));
 
-        try { File.AppendAllText(filePath, line.ToString() + "\n"); } catch (System.Exception) { isLogging = false; }
+        try {File.AppendAllText(filePath, line.ToString() + "\n"); } catch (System.Exception) { isLogging = false; }
     }
 
     void OnApplicationQuit() { if (isLogging) StopLogger(); }
