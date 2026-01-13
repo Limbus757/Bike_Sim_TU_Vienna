@@ -96,8 +96,8 @@ public class SentSerialController : MonoBehaviour
         string message = string.Format(
             CultureInfo.InvariantCulture,
             "{0},{1},{2},{3},{4}\n", // New Format: 5 comma-separated values
-            SteeringDirPinValue,
             SteeringENPinValue,
+            SteeringDirPinValue,
             SteeringPWMPinValue,
             VibrationPMWValueLeft,
             VibrationPMWValueRight

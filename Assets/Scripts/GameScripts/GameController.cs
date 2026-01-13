@@ -35,14 +35,26 @@ public class GameController : MonoBehaviour {
         SpawnBike();
     }
 
-    public void OnBikePassedTrigger() {
+    private float lastTriggerTime = 0f;
+    private float triggerCooldown = 3.0f; // Seconds to wait between triggers
+
+    public void OnBikePassedTrigger()
+    {
         if (studyFinished) return;
-        if (!studyStarted) {
+        if (Time.time - lastTriggerTime < triggerCooldown) return;
+        lastTriggerTime = Time.time;
+
+        if (!studyStarted)
+        {
             studyStarted = true;
             currentLap = 1;
+            Debug.Log("Study Started - Logger Called");
             if (dataLogger != null) dataLogger.StartLogger();
-        } else {
+        }
+        else
+        {
             currentLap++;
+            Debug.Log("Lap " + currentLap + " recorded");
             if (currentLap > totalRoundsToComplete) FinishStudy();
         }
     }

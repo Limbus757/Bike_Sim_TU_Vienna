@@ -126,7 +126,7 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider
         if (steeringInitialized && leftController != null)
         {
 
-            // 1. Isolate the World Y-axis rotation (Yaw) of the current controller rotation.
+            // isolate the World Y-axis rotation (Yaw) of the current controller rotation.
             Quaternion currentWorldYaw = Quaternion.Euler(
                 0,
                 leftController.transform.rotation.eulerAngles.y,

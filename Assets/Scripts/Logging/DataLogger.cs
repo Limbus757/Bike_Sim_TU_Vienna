@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using System.IO;
@@ -12,68 +13,69 @@ public class DataLogger : MonoBehaviour
 
     private string filePath;
     private bool isLogging = false;
+    private StreamWriter sw;
 
-    // Header updated to track the switch and engagement separately
     string header = "Time,BikeSpeed,SteerAngle,FrontBrake,BackBrake," +
                     "LkaSwitchState,LkaEngaged,MotorDir,MotorPWM," +
                     "IsOnStraight,Curvature,CrossTrackError,HeadingError";
 
-    private const string END_OF_LOG_MARKER = "--- END OF LOG ---";
-
-    void Awake()
-    {
-        bikeController = GetComponent<BikeController>();
-        lkaController = GetComponent<LaneKeepingAssist>();
-        frenetController = GetComponent<MLClosedSplineFrenet>();
+    void Awake() {
+        bikeController = FindObjectOfType<BikeController>();
+        lkaController = FindObjectOfType<LaneKeepingAssist>();
+        frenetController = FindObjectOfType<MLClosedSplineFrenet>();
         gameController = FindObjectOfType<GameController>();
     }
 
     void Start() {
-        string basePath = Application.dataPath;
-        
-        string studyName = (gameController != null) ? gameController.studyName : "DefaultStudy";
-        string participantID = (gameController != null) ? gameController.studyParticipantId.ToString() : "0";
-        string timestamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string studyFolderPath = Path.Combine(basePath, "Scripts", "Logging", studyName);
+        // get the path to 'C:\Users\Name\Documents'
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
-        if (!Directory.Exists(studyFolderPath)) {
+        // define the StudyData folder inside Documents
+        string studyName = (gameController != null) ? gameController.studyName : "DefaultStudy";
+        string studyFolderPath = Path.Combine(documentsPath, "StudyData", studyName);
+
+        // create the directory if it doesn't exist
+        if (!Directory.Exists(studyFolderPath))
+        {
             Directory.CreateDirectory(studyFolderPath);
         }
 
+        // setup filename
+        string participantID = (gameController != null) ? gameController.studyParticipantId.ToString() : "0";
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
         string fileName = $"{participantID}_Log_{timestamp}.csv";
-        filePath = Path.Combine(studyFolderPath, fileName);
-    }
 
-    void FixedUpdate() {
-        if (isLogging) LogCurrentData();
+        filePath = Path.Combine(studyFolderPath, fileName);
+
+        Debug.Log($"Logger path set to: {filePath}");
     }
 
     public void StartLogger() {
         if (isLogging) return;
         try {
-            if (!Directory.Exists(Path.GetDirectoryName(filePath)))
-            {
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-            }
+            // open the file stream (append: false to create fresh file)
+            sw = new StreamWriter(filePath, false);
 
-            string metadata = $"{(gameController != null ? gameController.studyName : "Study")},{(gameController != null ? gameController.studyParticipantId.ToString() : "0")}\n";
-            File.WriteAllText(filePath, metadata);
-            File.AppendAllText(filePath, header + "\n");
+            string metadata = $"{(gameController != null ? gameController.studyName : "Study")},{(gameController != null ? gameController.studyParticipantId.ToString() : "0")}";
+            sw.WriteLine(metadata);
+            sw.WriteLine(header);
             isLogging = true;
+            Debug.Log("<color=green>Logging Started Successfully!</color>");
         }
-        catch (System.Exception e) { Debug.LogError("Logger Start Error: " + e.Message); }
+        catch (Exception e)
+        {
+            Debug.LogError("Logger Start Error: " + e.Message);
+        }
     }
 
-    public void StopLogger()
+    void FixedUpdate()
     {
-        if (!isLogging) return;
-        isLogging = false;
-        try { File.AppendAllText(filePath, END_OF_LOG_MARKER + "\n"); } catch (System.Exception e) { Debug.LogError("Logger Stop Error: " + e.Message); }
+        if (isLogging) LogCurrentData();
     }
 
     private void LogCurrentData()
     {
-        if (bikeController == null || lkaController == null || frenetController == null) return;
+        if (bikeController == null || lkaController == null || frenetController == null || sw == null) return;
 
         StringBuilder line = new StringBuilder();
         line.Append(Time.time.ToString("F4")).Append(",");
@@ -81,22 +83,40 @@ public class DataLogger : MonoBehaviour
         line.Append(bikeController.SteeringAngle.ToString("F4")).Append(",");
         line.Append(bikeController.FrontBrakeforce.ToString("F4")).Append(",");
         line.Append(bikeController.BackBrakeforce.ToString("F4")).Append(",");
-
-        // LKA Hardware Switch State
         line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(",");
-
-        // LKA Software Engagement (Active Steering)
         line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
         line.Append(lkaController.motorDirection ? "1" : "0").Append(",");
         line.Append(lkaController.motorPWM).Append(",");
-
         line.Append(frenetController.isOnStraight ? "1" : "0").Append(",");
         line.Append(frenetController.curvatureAmount.ToString("F6")).Append(",");
         line.Append(frenetController.crossTrackError.ToString("F4")).Append(",");
         line.Append(frenetController.headingErrorDeg.ToString("F4"));
 
-        try {File.AppendAllText(filePath, line.ToString() + "\n"); } catch (System.Exception) { isLogging = false; }
+        sw.WriteLine(line.ToString());
     }
 
-    void OnApplicationQuit() { if (isLogging) StopLogger(); }
+    public void StopLogger()
+    {
+        if (!isLogging || sw == null) return;
+
+        isLogging = false;
+        try
+        {
+            sw.WriteLine("--- END OF LOG ---");
+            sw.Flush();
+            sw.Close();
+            sw.Dispose();
+            sw = null;
+            Debug.Log("<color=yellow>Logging Stopped. File Saved.</color>");
+        }
+        catch (Exception e)
+        {
+            Debug.LogError("Logger Stop Error: " + e.Message);
+        }
+    }
+
+    void OnApplicationQuit()
+    {
+        StopLogger();
+    }
 }
