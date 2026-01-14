@@ -117,7 +117,7 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour
             pwmLeft = Mathf.SmoothDamp(pwmLeft, targetLeft, ref _pwmLeftVel, smoothTime);
             pwmRight = Mathf.SmoothDamp(pwmRight, targetRight, ref _pwmRightVel, smoothTime);
         }
-        pwmLeft255 = Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 255f), 0, 255);
-        pwmRight255 = Mathf.Clamp(Mathf.RoundToInt(pwmRight * 255f), 0, 255);
+        pwmLeft255 = 123-Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 123f), 0, 123);
+        pwmRight255 = 123-Mathf.Clamp(Mathf.RoundToInt(pwmRight * 123f), 0, 123);
     }
 }

@@ -89,17 +89,18 @@ void setup() {
   setPinmodes();
   setSafeState(); // Ensure pins are in safe state on boot
 
-  /*
+  
   if (!configureDrv2605One(VIB_EN_LEFT)) {
     Serial.println("DRV2605 Left Error");
-    while (1); 
+   // while (1); 
   }
-
-  if (!configureDrv2605One(VIB_EN_RIGHT)) {
+ /*
+ if (!configureDrv2605One(VIB_EN_RIGHT)) {
     Serial.println("DRV2605 Right Error");
     while (1);
   }
-  */
+ */ 
+  
 
   // Keep both haptic drivers enabled for PWM operation
   digitalWrite(VIB_EN_LEFT, HIGH);

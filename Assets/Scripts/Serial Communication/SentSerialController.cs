@@ -16,6 +16,8 @@ public class SentSerialController : MonoBehaviour
     [Header("0. Data Source")]
     [Tooltip("The LaneKeepingAssist script that determines the motor control values.")]
     public LaneKeepingAssist laneKeepingAssist;
+    [Tooltip("The Haptic script that determines the motor control values.")]
+    public ML_LaneHapticsFromPercent Haptics;
 
     // --- Configuration & Debug Fields ---
     [Header("1. Settings")]
@@ -88,8 +90,8 @@ public class SentSerialController : MonoBehaviour
             SteeringPWMPinValue = laneKeepingAssist.motorPWM;
 
             //Placeholder PWM pins for Handlebar vibration Motors
-            VibrationPMWValueLeft = DEFAULT_PWM_UNUSED;
-            VibrationPMWValueRight = DEFAULT_PWM_UNUSED;
+            VibrationPMWValueLeft = Haptics.pwmLeft255;
+            VibrationPMWValueRight = Haptics.pwmRight255;
         }
 
         // We use 'R' for Request/Control Header
