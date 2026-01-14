@@ -1,0 +1,123 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+public class ML_LaneHapticsFromPercent : MonoBehaviour
+{
+
+    [Header("Input")]
+    [Tooltip("Source providing lanePercent (-100..+100). If null, will try GetComponent.")]
+    public LanePercentFromCenter lanePercentSource;
+
+    [Header("Thresholds (Percent)")]
+    [Tooltip("Below this absolute lane % there is no vibration (deadzone). Example: 40 means start at |lanePercent| >= 40.")]
+    [Range(0f, 100f)]
+    public float startPercent = 40f;
+
+    [Tooltip("At this absolute lane % vibration reaches maximum (still before LKA). Example: 80.")]
+    [Range(0f, 100f)]
+    public float maxPercent = 80f;
+
+    [Header("Response Curve")]
+    [Tooltip("Maps normalized distance (0..1) to intensity (0..1). X=0 at startPercent, X=1 at maxPercent.")]
+    public AnimationCurve intensityCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+    [Header("Output Scaling")]
+    [Tooltip("Master gain multiplier for vibration intensity.")]
+    [Range(0f, 2f)]
+    public float gain = 1f;
+
+    [Tooltip("Minimum PWM once vibration has started (helps feeling the onset).")]
+    [Range(0f, 1f)]
+    public float minPwmWhenActive = 0f;
+
+    [Header("Smoothing")]
+    [Tooltip("0 = no smoothing. Higher values smooth more (good to avoid jitter).")]
+    [Range(0f, 30f)]
+    public float smoothing = 10f;
+
+    [Header("Outputs (Read-only)")]
+    [Range(0f, 1f)] public float pwmLeft;
+    [Range(0f, 1f)] public float pwmRight;
+    [Range(0, 255)] public int pwmLeft255;
+    [Range(0, 255)] public int pwmRight255;
+
+    private float _pwmLeftVel;
+    private float _pwmRightVel;
+
+    private void Awake()
+    {
+        if (lanePercentSource == null)
+            lanePercentSource = GetComponent<LanePercentFromCenter>();
+
+        // Safety: ensure sensible thresholds
+        startPercent = Mathf.Clamp(startPercent, 0f, 100f);
+        maxPercent = Mathf.Clamp(maxPercent, 0f, 100f);
+        if (maxPercent < startPercent) maxPercent = startPercent;
+    }
+
+    private void Update()
+    {
+        if (lanePercentSource == null)
+        {
+            pwmLeft = pwmRight = 0f;
+            pwmLeft255 = pwmRight255 = 0;
+            return;
+        }
+
+        float lanePercent = Mathf.Clamp(lanePercentSource.lanePercent, -100f, 100f);
+
+        // How far from center in absolute percent (0..100)
+        float absP = Mathf.Abs(lanePercent);
+
+        // Normalize to 0..1 within [startPercent..maxPercent]
+        float t = 0f;
+        if (absP <= startPercent)
+        {
+            t = 0f; // deadzone
+        }
+        else if (maxPercent <= startPercent + 0.0001f)
+        {
+            // Degenerate case: start == max -> step behavior
+            t = 1f;
+        }
+        else
+        {
+            t = Mathf.InverseLerp(startPercent, maxPercent, absP);
+        }
+
+        // Map through curve
+        float intensity = Mathf.Clamp01(intensityCurve.Evaluate(t)) * gain;
+
+        // Optional minimum when active (only if t>0)
+        if (t > 0f)
+            intensity = Mathf.Max(intensity, minPwmWhenActive);
+
+        intensity = Mathf.Clamp01(intensity);
+
+        // Decide side:
+        // lanePercent > 0 means you're left -> rumble LEFT side (you are near left edge)
+        // lanePercent < 0 means you're right -> rumble RIGHT side
+        float targetLeft = 0f;
+        float targetRight = 0f;
+
+        if (lanePercent > 0.01f) targetLeft = intensity;
+        else if (lanePercent < -0.01f) targetRight = intensity;
+        else { targetLeft = 0f; targetRight = 0f; }
+
+        // Smoothing (exponential-ish using SmoothDamp)
+        if (smoothing <= 0f)
+        {
+            pwmLeft = targetLeft;
+            pwmRight = targetRight;
+        }
+        else
+        {
+            float smoothTime = 1f / smoothing; // bigger smoothing -> smaller time constant
+            pwmLeft = Mathf.SmoothDamp(pwmLeft, targetLeft, ref _pwmLeftVel, smoothTime);
+            pwmRight = Mathf.SmoothDamp(pwmRight, targetRight, ref _pwmRightVel, smoothTime);
+        }
+        pwmLeft255 = Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 255f), 0, 255);
+        pwmRight255 = Mathf.Clamp(Mathf.RoundToInt(pwmRight * 255f), 0, 255);
+    }
+}

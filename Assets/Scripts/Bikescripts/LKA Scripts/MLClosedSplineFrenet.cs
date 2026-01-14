@@ -177,7 +177,20 @@ public class MLClosedSplineFrenet : MonoBehaviour
             }
         }
         bestK = lastBestK;
+        float dist = Mathf.Sqrt(bestDist2); 
+        if (dist > 30f) 
+        {
+            int best = 0;
+            float bestD2 = float.MaxValue;
+            for (int i = 0; i < N; i++)
+            {
+                float d2 = (pts[i] - pos).sqrMagnitude;
+                if (d2 < bestD2) { bestD2 = d2; best = i; }
+            }
+            lastBestK = best;
 
+            bestDist2 = bestD2;
+        }
         // 2) SEGMENT PROJECTION (Unchanged)
         int aK = bestK;
         int bK = Mod(bestK + 1, N);
