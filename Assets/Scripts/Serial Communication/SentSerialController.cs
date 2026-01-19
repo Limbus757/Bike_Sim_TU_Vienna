@@ -37,7 +37,7 @@ public class SentSerialController : MonoBehaviour
     [Tooltip("Actual period (in ms) of the sending thread.")]
     public uint actualSendPeriodMs = 0;
 
-    // --- Control Outputs (Mapped to ESP32 Pins) ---
+    // --- Control Outputs ---
     [Header("3. Steering Control Outputs")]
     [Tooltip("Value for the Direction Pin (0=Left, 1=Right).")]
     public int SteeringDirPinValue = 0;

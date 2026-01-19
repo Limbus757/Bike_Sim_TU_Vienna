@@ -36,7 +36,7 @@ public class GameController : MonoBehaviour {
     }
 
     private float lastTriggerTime = 0f;
-    private float triggerCooldown = 3.0f; // Seconds to wait between triggers
+    private float triggerCooldown = 5.0f; // Seconds to wait between triggers
 
     public void OnBikePassedTrigger()
     {

@@ -38,7 +38,7 @@ public class BikeController : MonoBehaviour {
     public float FrontBrakeforce;
     public float BackBrakeforce;
 
-    // variables relevent to how the bike handles, need to be tuned
+    // variables relevent to how the bike handles, can be tuned
     private float accelerationMultiplier = 2.5f;
     private float brakeForceMultiplier = 3.0f;
     private float tiltMultiplier = 0.5f;
@@ -87,7 +87,6 @@ public class BikeController : MonoBehaviour {
                 inputProvider = GetComponent<SimulatorInputProvider>();
                 break;
             case InputMode.Gamepad:
-                // Assuming you have a GamepadInput class that implements IBikeInputProvider
                 inputProvider = GetComponent<GamepadInputProvider>();
                 break;
             default:
@@ -163,6 +162,7 @@ public class BikeController : MonoBehaviour {
         }
     }
 
+    // TODO: This function is currently not fully implemented, because the Motion Platform is not working
     private void UpdateBikeTiltAndPitch() {
 
         #warning  TODO REFINE CALULATIONS
@@ -215,6 +215,9 @@ public class BikeController : MonoBehaviour {
     private void UpdateBikeVisuals() {
         HandleBarTransform.localEulerAngles = new Vector3(0.0f, SteeringAngle, 0.0f);
     }
+
+
+    // TODO: This function is currently not fully implemented, because the Motion Platform is not working
 
     private void ApplyCameraTilting() {
         float visualTiltAngle = -(TiltAngle) * visualTiltMultiplier;

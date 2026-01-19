@@ -2,21 +2,14 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
-public class ResetPosition : MonoBehaviour
-{
+public class ResetPosition : MonoBehaviour {
 
     [SerializeField] Transform resetTransform;
     [SerializeField] GameObject player;
     [SerializeField] Camera playerHead;
 
-    public void Update()
-    {
-        if (Input.GetKeyDown("v"))
-        {
-            ResetViewPosition();
-        }
-        if(OVRInput.Get(OVRInput.Button.Two))
-        {
+    public void Update() {
+        if (Input.GetKeyDown("v") || OVRInput.Get(OVRInput.Button.Two)) {
             ResetViewPosition();
         }
     }
