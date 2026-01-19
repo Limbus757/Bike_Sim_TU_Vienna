@@ -94,8 +94,7 @@ public class MLClosedSplineFrenet : MonoBehaviour
         cumLen = new float[N + 1];
         totalLength = 0f;
 
-        for (int i = 0; i <= N; i++)
-        {
+        for (int i = 0; i <= N; i++) {
             float t = (float)i / N; // Normalized time (0 to 1)
 
             // Convert Spline Local space to World space
@@ -108,27 +107,17 @@ public class MLClosedSplineFrenet : MonoBehaviour
             // Calculate track 'sharpness' at this point
             float rawCurvature = spline.EvaluateCurvature(t);
 
-            // --- CURVATURE FIX ---
-            if (float.IsNaN(rawCurvature) || float.IsInfinity(rawCurvature))
-            {
+            if (float.IsNaN(rawCurvature) || float.IsInfinity(rawCurvature)) {
                 // If the curvature evaluation results in NaN (division by zero), 
                 // we treat it as perfectly straight (zero curvature).
                 curvatures[i] = 0f;
-                if (float.IsNaN(rawCurvature))
-                {
-                    Debug.LogWarning("[Frenet] NaN Curvature detected during bake at index " + i + ". Treating as 0.");
-                }
-            }
-            else
-            {
-                // Curvature is always a magnitude, so we use its absolute value.
+            } else {
+                // curvature is always a magnitude, so we use its absolute value.
                 curvatures[i] = Mathf.Abs(rawCurvature);
             }
-            // --- END CURVATURE FIX ---
 
-            // Record cumulative distance along the track
-            if (i > 0)
-            {
+            // records cumulative distance along the track
+            if (i > 0) {
                 float seg = Vector3.Distance(pts[i - 1], pts[i]);
                 totalLength += seg;
                 cumLen[i] = totalLength;
@@ -139,8 +128,7 @@ public class MLClosedSplineFrenet : MonoBehaviour
         Debug.Log($"[Frenet] Spline Baked successfully. Total Length: {totalLength:F2}m.");
     }
 
-    void Update()
-    {
+    void Update() {
         if (centerLine == null || bike == null || pts == null || pts.Length == 0) return;
 
         // Determine which way is 'Up' for the bike (Standard Up or Ground Normal)
@@ -230,8 +218,6 @@ public class MLClosedSplineFrenet : MonoBehaviour
         // Determine the RAW state (before smoothing)
         internalState = curvatureAmount < straightThreshold;
     }
-
-    // ... (UpdateSmoothing, SampleGroundUp, Mod, ModF, OnDrawGizmosSelected remain the same) ...
 
     /// <summary>
         /// Prevents the isOnStraight boolean from flickering if the track data is noisy.

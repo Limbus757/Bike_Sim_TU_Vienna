@@ -1,12 +1,8 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 // Ensure this script is placed in the same project/namespace as ReceivedSerialProvider
 // or that ReceivedSerialProvider is accessible.
-public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider
-{
-
+public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider {
     [Header("Controller Assignments")]
     [Tooltip("The VR Controller GameObject used to capture steering input.")]
     public GameObject leftController;
@@ -16,61 +12,33 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider
 
     public float SteeringAngle { get; private set; } = 0.0f;
 
-    private Transform handlebar;
-    // Stores the rotation set during calibration, used as the zero reference
-    private Quaternion steeringZeroRotation = Quaternion.identity;
     private bool steeringInitialized = false;
+    private float steeringZeroYaw = 0f;
 
-    // --- Interface Methods (Reading Serial Data) ---
+    // --- Interface Methods ---
 
-    public float GetRearBrakeForce()
-    {
-        return ReceivedSerialProvider.RearBrakeForce;
-    }
-
-    public float GetFrontBrakeForce()
-    {
-        return ReceivedSerialProvider.FrontBrakeForce;
-    }
-
-    public float GetResistance()
-    {
-        return ReceivedSerialProvider.ResistanceValue;
-    }
-
-    public float GetSpeed()
-    {
-        return ReceivedSerialProvider.SpeedKmh;
-    }
-
-    public float GetSteeringAngle()
-    {
-        UpdateSteeringAngle();
-        return SteeringAngle;
-    }
+    public float GetRearBrakeForce() => ReceivedSerialProvider.RearBrakeForce;
+    public float GetFrontBrakeForce() => ReceivedSerialProvider.FrontBrakeForce;
+    public float GetResistance() => ReceivedSerialProvider.ResistanceValue;
+    public float GetSpeed() => ReceivedSerialProvider.SpeedKmh;
+    public float GetSteeringAngle() => SteeringAngle;
 
     // --- Core Lifecycle ---
 
-    void Awake()
-    {
+    void Awake() {
         InitializeSteering();
     }
 
-    void Start()
-    {
+    void Start() {
         // Auto-calibrate after a short delay to ensure VR tracking is active
         Invoke(nameof(RecalibrateSteering), 1.0f);
     }
 
-    void Update()
-    {
-        // NOTE: Ensure your separate CameraAndSteeringCalibration script handles 
-        // the OVRInput button check and calls RecalibrateSteering().
-        // Keeping the Spacebar check here for easy testing if that script is absent.
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
+    void Update() {
+        // Calibration check
+        if (Input.GetKeyDown(KeyCode.Space) || OVRInput.GetDown(OVRInput.Button.Two)) {
             RecalibrateSteering();
-            Debug.Log("Steering Recalibrated via calibration button.");
+            Debug.Log("Steering Recalibrated.");
         }
 
         UpdateSteeringAngle();
@@ -78,89 +46,41 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider
 
     // --- Steering Logic ---
 
-    private void InitializeSteering()
-    {
-        handlebar = this.transform.Find("WheelHandleBar");
-
-        if (handlebar == null)
-        {
-            Debug.LogError("SimulatorInputProvider: 'WheelHandleBar' child Transform not found! Check name.");
-        }
-
-        if (leftController == null)
-        {
-            Debug.LogError("SimulatorInputProvider: 'Left Controller' GameObject not assigned! Steering input will not work.");
-        }
-
-        if (leftController != null)
-        {
+    private void InitializeSteering() {
+        if (leftController != null) {
             steeringInitialized = true;
-            Debug.Log("SimulatorInputProvider: Steering setup complete. Waiting for calibration.");
+        } else {
+            Debug.LogError("SimulatorInputProvider: 'Left Controller' GameObject not assigned!");
         }
     }
 
-    /// <summary>
-    /// Captures the left controller's current rotation as the new straight-ahead zero-point.
-    /// </summary>
-    public void RecalibrateSteering()
-    {
-        if (!steeringInitialized || leftController == null)
-        {
-            Debug.LogError("Recalibration Failed: Steering system not initialized or controller missing.");
-            return;
-        }
+    public void RecalibrateSteering() {
+        if (!steeringInitialized || leftController == null) return;
 
-        // Capture the current rotation of the left controller as the new zero-point.
-        // Only capture the Y-axis rotation (Yaw) of the controller for a cleaner zero reference.
-        steeringZeroRotation = Quaternion.Euler(0, leftController.transform.rotation.eulerAngles.y, 0);
+        // Calculate how much the controller is offset from the BIKE'S current world rotation
+        float currentWorldYaw = leftController.transform.eulerAngles.y;
+        float bikeWorldYaw = transform.eulerAngles.y;
 
-        Debug.Log($"Steering Zero-Point Set to World Yaw: {steeringZeroRotation.eulerAngles.y:F2}");
+        // Store the difference so 'straight' is always relative to the bike's heading
+        steeringZeroYaw = Mathf.DeltaAngle(bikeWorldYaw, currentWorldYaw);
+
+        Debug.Log($"Steering Calibrated! Zero Offset relative to bike: {steeringZeroYaw:F2}");
     }
 
-    /// <summary>
-    /// Calculates the steering angle by isolating the World Y-axis (Yaw) rotation.
-    /// This makes the steering less susceptible to controller roll and pitch.
-    /// </summary>
-    private void UpdateSteeringAngle()
-    {
-        if (steeringInitialized && leftController != null)
-        {
+    private void UpdateSteeringAngle() {
+        if (steeringInitialized && leftController != null) {
+            // 1. Get current world yaw of controller and bike
+            float currentWorldYaw = leftController.transform.eulerAngles.y;
+            float bikeWorldYaw = transform.eulerAngles.y;
 
-            // isolate the World Y-axis rotation (Yaw) of the current controller rotation.
-            Quaternion currentWorldYaw = Quaternion.Euler(
-                0,
-                leftController.transform.rotation.eulerAngles.y,
-                0
-            );
+            // 2. Calculate the controller's yaw relative to the bike's current heading
+            float relativeYaw = Mathf.DeltaAngle(bikeWorldYaw, currentWorldYaw);
 
-            // 2. Isolate the World Y-axis rotation (Yaw) of the zero-point.
-            // Note: This is redundant if RecalibrateSteering() is correct, but safer here.
-            Quaternion zeroWorldYaw = Quaternion.Euler(
-                0,
-                steeringZeroRotation.eulerAngles.y,
-                0
-            );
+            // 3. Subtract the calibration offset to find the actual steering input
+            float deltaYaw = Mathf.DeltaAngle(steeringZeroYaw, relativeYaw);
 
-            // 3. Calculate the rotational difference (delta).
-            // This is the rotation from the zero point to the current point.
-            Quaternion currentDelta = Quaternion.Inverse(zeroWorldYaw) * currentWorldYaw;
-
-            float tempSteeringAngle = 0.0f;
-
-            // 4. Extract the Yaw from the delta.
-            tempSteeringAngle = currentDelta.eulerAngles.y;
-
-            // 5. Convert 0-360 range to the shortest signed angle (-180 to 180).
-            tempSteeringAngle = Mathf.DeltaAngle(0, tempSteeringAngle);
-
-            // 6. Clamp to bike steering limits and set the final angle.
-            tempSteeringAngle = Mathf.Clamp(tempSteeringAngle, -90, 90);
-            SteeringAngle = tempSteeringAngle;
-
-        }
-        else if (handlebar == null)
-        {
-            Debug.LogWarning("SteeringInputProvider: Initialization failed, cannot change steering angle!");
+            // 4. Clamp to your +/- 50 degree limits
+            SteeringAngle = Mathf.Clamp(deltaYaw, -50f, 50f);
         }
     }
 }
