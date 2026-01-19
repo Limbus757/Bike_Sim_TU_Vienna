@@ -16,7 +16,7 @@ uint8_t SpeedMSB = 0x00;
 uint16_t Speed = 0;
 float SpeedO;
 
-int speedWindGenerator = 0; // für Wind generator
+//int speedWindGenerator = 0; // für Wind generator
 
 float ResistanceAngle = 0.0;
 float steeringAngle = 0.0;
@@ -41,13 +41,13 @@ void setup() {
 
   // begin initialization
   if (!BLE.begin()) {
-    uduino.println("starting BLE failed!");
+    //uduino.println("starting BLE failed!");
 
     while (1);
   }
 
-  uduino.println("BLE Central - Indoor Bike Data");
-  uduino.println("Make sure to turn on the device.");
+  //uduino.println("BLE Central - Indoor Bike Data");
+  ///uduino.println("Make sure to turn on the device.");
 
   // start scanning for peripheral
   BLE.scan();
@@ -141,15 +141,15 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
   // subscribe to the simple key characteristic
   uduino.println("Subscribing to simple key characteristic 2ad9 FitnessMachineControlPointCharacteristic...");
   if (!indoorBikeDataCharacteristic) {
-    uduino.println("no simple key characteristic 2ad9 FitnessMachineControlPointCharacteristic found!");
+    //uduino.println("no simple key characteristic 2ad9 FitnessMachineControlPointCharacteristic found!");
     peripheral.disconnect();
     return;
   } else if (!indoorBikeDataCharacteristic.canSubscribe()) {
-    uduino.println("simple key characteristic 2ad9 FitnessMachineControlPointCharacteristic is not subscribable!");
+    //uduino.println("simple key characteristic 2ad9 FitnessMachineControlPointCharacteristic is not subscribable!");
     peripheral.disconnect();
     return;
   } else if (!indoorBikeDataCharacteristic.subscribe()) {
-    uduino.println("subscription 2ad9 FitnessMachineControlPointCharacteristic failed!");
+    //uduino.println("subscription 2ad9 FitnessMachineControlPointCharacteristic failed!");
     peripheral.disconnect();
     return;
   } else {
@@ -217,15 +217,17 @@ void monitorIndoorBikeData(BLEDevice peripheral) {
           Speed = Speed | SpeedLSB;
           SpeedO = Speed * 0.01;
 
-          speedWindGenerator = map(SpeedO, 0 , 20, 0, 255);
+          //speedWindGenerator = map(SpeedO, 0 , 20, 0, 255);
 
           digitalWrite(12, HIGH); //Establishes forward direction of Channel A
           digitalWrite(9, HIGH);   //Disengage the Brake for Channel A
+          /*
           if (speedWindGenerator >= 100) {
             //analogWrite(3, speedWindGenerator);   //Spins the motor on Channel A at full speed
           } else {
             digitalWrite(9, LOW);
           }
+          */
         }
 
 
