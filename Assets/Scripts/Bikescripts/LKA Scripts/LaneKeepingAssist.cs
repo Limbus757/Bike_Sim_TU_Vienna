@@ -21,7 +21,7 @@ public class LaneKeepingAssist : MonoBehaviour {
     public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
-    public float Kp = 0.2f; // Increased slightly as hardware is now 50% slower
+    public float Kp = 0.2f;
     public float Ki = 0.01f;
     public float Kd = 0.05f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
@@ -42,8 +42,8 @@ public class LaneKeepingAssist : MonoBehaviour {
     private float lastHeadingError = 0f;
     private float smoothedDerivative = 0f;
 
-    private const int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM (now 0 RPM)
-    private const int MAX_MOTOR_PWM = 228; // maxon motor 90% PWM (now 500 RPM)
+    private const int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM 
+    private const int MAX_MOTOR_PWM = 228; // maxon motor 90% PWM
     private bool wasActiveLastFrame = false;
 
     void Awake() {
@@ -71,32 +71,26 @@ public class LaneKeepingAssist : MonoBehaviour {
             return;
         }
 
-        float deviation = frenetSource.crossTrackError;
-
-        // normalize heading error (-1 to 1)
-        NormalizedHeading = Mathf.Clamp(frenetSource.headingErrorDeg / maxHeadingAngle, -1f, 1f);
-
-        // normalize crosstrack error (-1 to 1)
-        NormalizedCrosstrack = config.GetNormalizedLKASteeringCrosstrackerror(deviation);
+        // normalize heading & cross track error (-1 to 1)
+        NormalizedCrosstrack = config.lkaCrossTrackErrorNormalized;
+        NormalizedHeading = Mathf.Clamp(frenetSource.headingErrorDegrees / 90f, -1f, 1f);
 
         // weighted total error
         CurrentError = (NormalizedCrosstrack * weightCrosstrack) + (NormalizedHeading * weightHeading);
 
-        // PID - Proportional
         float p = Kp * CurrentError;
 
-        // PID - Integral (Persistent: we don't reset this in the deadzone anymore)
         integralError = Mathf.Clamp(integralError + (CurrentError * Time.fixedDeltaTime), -1f, 1f);
         float i = Ki * integralError;
 
         // PID - Derivative (Calculated on heading change for dampening)
-        float rawDerivative = (frenetSource.headingErrorDeg - lastHeadingError) / Time.fixedDeltaTime;
+        float rawDerivative = (frenetSource.headingErrorDegrees - lastHeadingError) / Time.fixedDeltaTime;
         smoothedDerivative = Mathf.Lerp(smoothedDerivative, rawDerivative, derivativeSmoothing);
         float d = Kd * smoothedDerivative;
-        lastHeadingError = frenetSource.headingErrorDeg;
+        lastHeadingError = frenetSource.headingErrorDegrees;
 
         // deadzone check - Disable motor drive but keep PID "warm"
-        if (Mathf.Abs(deviation) < config.LKADeadZoneMeters) {
+        if (Mathf.Abs(NormalizedCrosstrack) == 0) {
             UpdateVisuals(Color.yellow, true);
             motorEnablePin = false; // releases torque
             motorPWM = MIN_MOTOR_PWM;

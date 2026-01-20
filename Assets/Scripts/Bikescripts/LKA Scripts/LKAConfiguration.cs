@@ -1,66 +1,77 @@
 using UnityEngine;
 
-using UnityEngine;
-
 /// <summary>
-/// Central hub for Lane Keeping Assist geometry and live lane position data.
-/// Attach this to a GameObject in your scene.
+/// Central configuration for Lane Keeping Assist and Lane-based Haptics.
+///
+/// Lane convention:
+///   0.0  = center
+///  -1.0  = left edge
+///  +1.0  = right edge
 /// </summary>
 public class LKAConfiguration : MonoBehaviour {
-    [Header("Script References")]
-    [Tooltip("The Frenet source providing cross-track error (ey).")]
+    [Header("Frenet Source")]
     public MLClosedSplineFrenet frenet;
 
     [Header("Lane Geometry")]
-    [Tooltip("The total width of the drivable track/lane in meters.")]
+    [Tooltip("Total drivable lane width in meters.")]
     public float trackWidthMeters = 3.0f;
 
-    [Tooltip("The percentage of the track width in which the LKA does not engage.")]
+    [Tooltip("Percentage of total lane width considered LKA deadzone.")]
     [Range(0f, 1f)]
-    public float deadZonePercentage = 0.10f;
+    public float lkaDeadZonePercentage = 0.35f;
 
-    [Header("Handlebar Vibration Thresholds (Percent)")]
-    [Tooltip("Below this absolute lane % there is no vibration (deadzone). Example: 40 means start at |lanePercent| >= 40.")]
-    [Range(0f, 100f)]
-    public float vibrationStartPercent = 40f;
+    [Header("Haptics Thresholds (Normalized Lane Units)")]
+    [Range(0f, 1f)]
+    public float hapticsDeadZonePercentage = 0.3f;
 
-    [Tooltip("At this absolute lane % vibration reaches maximum (still before LKA). Example: 80.")]
-    [Range(0f, 100f)]
-    public float vibrationMaxPercent = 80f;
+    [Range(0f, 1f)]
+    public float hapticsMaxVibPercentage = 0.8f;
 
-    [Header("Live Output (Read-Only)")]
-    [Tooltip("-100 (Right Edge) to +100 (Left Edge). Used by Haptics.")]
-    [Range(-100f, 100f)]
-    public float lanePercent;
+    [Header("Live Lane Position (Read-only)")]
+    public float crossTrackErrorNormalized;
+    
+    public float lkaCrossTrackErrorNormalized;
 
-    // Public properties for other scripts to access
-    public float RoadHalfWidthMeters => trackWidthMeters / 2.0f;
-    public float LKADeadZoneMeters => trackWidthMeters * deadZonePercentage;
+    public float RoadHalfWidthMeters => trackWidthMeters * 0.5f;
 
     private void Awake() {
-        if (frenet == null) frenet = GetComponent<MLClosedSplineFrenet>();
+        if (frenet == null)
+            frenet = GetComponent<MLClosedSplineFrenet>();
+    }
+
+    // This ensures haptic thresholds are valid in the Inspector
+    private void OnValidate() {
+        // If they are exactly the same, push Max to the edge to avoid division by zero in InverseLerp
+        if (Mathf.Approximately(hapticsMaxVibPercentage, hapticsDeadZonePercentage)) {
+            hapticsMaxVibPercentage = 1.0f;
+            Debug.LogWarning("[LKAConfig] Haptic Max and Deadzone were identical. Max has been set to 1.0 to ensure a valid range.");
+        }
+
+        // Flip the values if the max vibration point is closer to the center than the deadzone
+        if (hapticsMaxVibPercentage < hapticsDeadZonePercentage) {
+            float temp = hapticsMaxVibPercentage;
+            hapticsMaxVibPercentage = hapticsDeadZonePercentage;
+            hapticsDeadZonePercentage = temp;
+
+            Debug.LogWarning("[LKAConfig] Haptic Max was lower than Deadzone. Values have been flipped to maintain logic.");
+        }
     }
 
     private void Update() {
         if (frenet == null) return;
 
-        // unified Calculation Logic: converts cross-track error to lane percentage (-100 to 100)
-        float ey = frenet.crossTrackError;
-        float hw = Mathf.Max(0.01f, RoadHalfWidthMeters);
+        crossTrackErrorNormalized = Mathf.Clamp(frenet.crossTrackErrorMeters / RoadHalfWidthMeters, -1f, 1f);
 
-        // Note: LKA uses ey (Left positive), Haptics use lanePercent (Right edge is -100)
-        lanePercent = Mathf.Clamp((-ey / hw) * 100f, -100f, 100f);
+        lkaCrossTrackErrorNormalized = ApplyDeadzone(crossTrackErrorNormalized, lkaDeadZonePercentage);
     }
 
-    /// <summary>
-    /// Helper for LKA to calculate normalized error using the central config values.
-    /// </summary>
-    public float GetNormalizedLKASteeringCrosstrackerror(float deviation) {
-        float sign = Mathf.Sign(deviation);
-        float distancePastDeadzone = Mathf.Abs(deviation) - LKADeadZoneMeters;
-        float usableLaneSpace = RoadHalfWidthMeters - LKADeadZoneMeters;
+    private float ApplyDeadzone(float normalizedError, float deadzonePercent) {
+        float absError = Mathf.Abs(normalizedError);
 
-        float result = (usableLaneSpace > 0) ? (distancePastDeadzone / usableLaneSpace) * sign : 0f;
-        return Mathf.Clamp(result, -1f, 1f);
+        if (absError <= deadzonePercent) return 0f;
+
+        // Remap the remaining space (deadzone to 1.0) back to (0.0 to 1.0)
+        float remapped = (absError - deadzonePercent) / (1f - deadzonePercent);
+        return remapped * Mathf.Sign(normalizedError);
     }
 }

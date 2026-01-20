@@ -3,256 +3,203 @@ using UnityEngine.Splines;
 using Unity.Mathematics;
 
 /// <summary>
-/// this script tracks a bike's progress along a unity spline.
-/// it converts world positions into "frenet" coordinates (s = distance along track, ey = offset from center).
-/// it also detects if the current track section is "straight" or "curved" based on curvature math.
+/// This script tracks a bike's progress along a Unity spline using Frenet coordinates.
+/// It calculates lateral offset (distance from center) and longitudinal progress (distance along track).
 /// </summary>
 public class MLClosedSplineFrenet : MonoBehaviour {
     [Header("Input References")]
-    [Tooltip("the transform of the bike/player.")]
-    public Transform bike;
-    [Tooltip("the splinecontainer defining the track path.")]
-    public SplineContainer centerLine;
-    [Tooltip("the index of the spline in the container (usually 0).")]
+    public Transform bikeTransform;
+    public SplineContainer trackSplineContainer;
     public int splineIndex = 0;
 
     [Header("Sampling Settings")]
-    [Tooltip("higher numbers increase precision but use more memory. 600 is usually plenty.")]
-    public int samples = 600;
-    [Tooltip("the number of nearby samples to check each frame. keeps performance high.")]
-    public int localWindow = 12;
+    public int resolutionSamples = 600;
+    public int localSearchWindow = 12;
 
     [Header("Curvature Detection")]
-    [Tooltip("the 'sharpness' limit. if curvature is below this, the track is 'straight'. try lowering this (e.g., 0.005) if long turns are missed.")]
-    public float straightThreshold = 0.015f;
-    [Tooltip("if true, the bool won't flicker on/off instantly on bumpy track sections.")]
+    public float straightLineThreshold = 0.015f;
     public bool useSmoothing = true;
-    [Tooltip("how many seconds the track must remain in a new state before the public bool flips.")]
     public float stateChangeDelay = 0.15f;
-
-    // small constant to prevent divide-by-zero errors.
-    private const float MIN_CURVATURE_DENOMINATOR = 1e-6f;
 
     [Header("Physics/Ground Settings")]
     public bool useGroundNormal = false;
-    public LayerMask groundMask = ~0;
-    public Vector3 roadUp = Vector3.up;
+    public LayerMask groundLayerMask = ~0;
+    public Vector3 currentSurfaceNormal = Vector3.up;
 
     [Header("Outputs (Read-Only)")]
-    public bool isOnStraight;
-    public float curvatureAmount;
-    public float crossTrackError;
-    public float s;
-    public float headingErrorDeg;
-    public Vector3 nearestPoint;
-    public Vector3 tangent;
-    public float totalLength;
+    public bool isOnStraightTrack;
+    public float currentCurvature;
+    public float crossTrackErrorMeters; // Was 'ey'
+    public float totalDistanceTravelled;  // Was 's'
+    public float headingErrorDegrees;
+    public Vector3 closestPointOnSpline;
+    public Vector3 trackTangentDirection;
+    public float lapTotalLength;
 
-    // internal arrays (the "baked" track)
-    private Vector3[] pts;
-    private Vector3[] tans;
-    private float[] curvatures;
-    private float[] cumLen;
-    private int N;
-    private int lastBestK = 0;
+    private GameController _gameController;
+    private const float EPSILON = 1e-6f;
 
-    // smoothing logic
-    private bool internalState;
-    private float stateTimer;
+    // Baked track data
+    private Vector3[] _samplePoints;
+    private Vector3[] _sampleTangents;
+    private float[] _sampleCurvatures;
+    private float[] _cumulativeDistances;
+    private int _lastClosestSampleIndex = 0;
 
-    void Awake() => Bake();
+    // Smoothing logic
+    private bool _rawIsStraightState;
+    private float _stateTransitionTimer;
 
-    void OnValidate() {
-        samples = Mathf.Max(32, samples);
-        localWindow = Mathf.Clamp(localWindow, 4, 64);
+    void Awake() {
+        _gameController = FindObjectOfType<GameController>();
+        BakeSplineData();
     }
 
-    /// <summary>
-    /// pre-calculates the spline data into arrays. 
-    /// </summary>
-    public void Bake() {
-        if (centerLine == null) return;
+    public void BakeSplineData() {
+        if (trackSplineContainer == null || trackSplineContainer.Splines.Count <= splineIndex) return;
 
-        // added null/index check
-        if (centerLine.Splines.Count == 0 || splineIndex >= centerLine.Splines.Count) {
-            Debug.LogError("[Frenet] cannot bake: splinecontainer is empty or spline index is out of bounds.");
-            return;
-        }
+        var spline = trackSplineContainer.Splines[splineIndex];
+        var worldTransform = trackSplineContainer.transform;
 
-        var spline = centerLine.Splines[splineIndex];
-        var tf = centerLine.transform;
+        _samplePoints = new Vector3[resolutionSamples + 1];
+        _sampleTangents = new Vector3[resolutionSamples + 1];
+        _sampleCurvatures = new float[resolutionSamples + 1];
+        _cumulativeDistances = new float[resolutionSamples + 1];
+        lapTotalLength = 0f;
 
-        N = samples;
-        pts = new Vector3[N + 1];
-        tans = new Vector3[N + 1];
-        curvatures = new float[N + 1];
-        cumLen = new float[N + 1];
-        totalLength = 0f;
+        for (int i = 0; i <= resolutionSamples; i++) {
+            float normalizedTime = (float)i / resolutionSamples;
 
-        for (int i = 0; i <= N; i++) {
-            float t = (float)i / N; // normalized time (0 to 1)
+            Vector3 localPos = (Vector3)spline.EvaluatePosition(normalizedTime);
+            Vector3 localTan = (Vector3)spline.EvaluateTangent(normalizedTime);
 
-            // convert spline local space to world space
-            Vector3 localPos = (Vector3)spline.EvaluatePosition(t);
-            Vector3 localTan = (Vector3)spline.EvaluateTangent(t);
+            _samplePoints[i] = worldTransform.TransformPoint(localPos);
+            _sampleTangents[i] = worldTransform.TransformDirection(localTan).normalized;
 
-            pts[i] = tf.TransformPoint(localPos);
-            tans[i] = tf.TransformDirection(localTan).normalized;
+            float rawCurve = spline.EvaluateCurvature(normalizedTime);
+            _sampleCurvatures[i] = (float.IsNaN(rawCurve) || float.IsInfinity(rawCurve)) ? 0f : Mathf.Abs(rawCurve);
 
-            // calculate track 'sharpness' at this point
-            float rawCurvature = spline.EvaluateCurvature(t);
-
-            if (float.IsNaN(rawCurvature) || float.IsInfinity(rawCurvature)) {
-                // if the curvature evaluation results in nan (division by zero), 
-                // we treat it as perfectly straight (zero curvature).
-                curvatures[i] = 0f;
-            } else {
-                // curvature is always a magnitude, so we use its absolute value.
-                curvatures[i] = Mathf.Abs(rawCurvature);
-            }
-
-            // records cumulative distance along the track
             if (i > 0) {
-                float seg = Vector3.Distance(pts[i - 1], pts[i]);
-                totalLength += seg;
-                cumLen[i] = totalLength;
-            } else cumLen[i] = 0f;
+                lapTotalLength += Vector3.Distance(_samplePoints[i - 1], _samplePoints[i]);
+                _cumulativeDistances[i] = lapTotalLength;
+            }
         }
-        lastBestK = 0;
-        Debug.Log($"[Frenet] spline baked successfully. total length: {totalLength:F2}m.");
     }
 
     void Update() {
-        if (centerLine == null || bike == null || pts == null || pts.Length == 0) return;
+        if (trackSplineContainer == null || bikeTransform == null || _samplePoints == null) return;
 
-        // determine which way is 'up' for the bike (standard up or ground normal)
-        roadUp = useGroundNormal ? SampleGroundUp(bike.position) : Vector3.up;
+        currentSurfaceNormal = useGroundNormal ? CalculateGroundNormal(bikeTransform.position) : Vector3.up;
 
-        // perform the core tracking logic
-        EvaluateAt(bike.position, roadUp, out crossTrackError, out s, out nearestPoint, out tangent, out headingErrorDeg);
+        CalculateFrenetCoordinates(
+            bikeTransform.position,
+            currentSurfaceNormal,
+            out crossTrackErrorMeters,
+            out totalDistanceTravelled,
+            out closestPointOnSpline,
+            out trackTangentDirection,
+            out headingErrorDegrees
+        );
 
-        // handle the straight/curved smoothing timer
-        UpdateSmoothing();
+        UpdateStraightStateSmoothing();
     }
 
-    /// <summary>
-    /// calculates all track-related data for a specific world position.
-    /// </summary>
-    void EvaluateAt(Vector3 pos, Vector3 up,
-                    out float ey, out float sOut,
-                    out Vector3 pStar, out Vector3 tHat, out float hdgErrDeg) {
+    void CalculateFrenetCoordinates(Vector3 position, Vector3 upVector,
+                                    out float lateralError, out float progressDist,
+                                    out Vector3 splinePoint, out Vector3 tangent, out float headingError) {
 
-        // local search
-        int bestK = lastBestK;
-        float bestDist2 = float.MaxValue;
-        int half = Mathf.Min(localWindow, N / 2);
+        // 1. Find the closest baked sample (Local Search)
+        int bestIndex = _lastClosestSampleIndex;
+        float minSqrDist = float.MaxValue;
+        int searchRange = Mathf.Min(localSearchWindow, resolutionSamples / 2);
 
-        for (int off = -half; off <= half; off++) {
-            int k = Mod(bestK + off, N);
-            float d2 = (pts[k] - pos).sqrMagnitude;
-            if (d2 < bestDist2) {
-                bestDist2 = d2;
-                lastBestK = k;
+        for (int offset = -searchRange; offset <= searchRange; offset++) {
+            int index = WrapIndex(bestIndex + offset, resolutionSamples);
+            float sqrDist = (_samplePoints[index] - position).sqrMagnitude;
+            if (sqrDist < minSqrDist) {
+                minSqrDist = sqrDist;
+                _lastClosestSampleIndex = index;
             }
         }
-        bestK = lastBestK;
-        float dist = Mathf.Sqrt(bestDist2);
-        if (dist > 30f) {
-            int best = 0;
-            float bestD2 = float.MaxValue;
-            for (int i = 0; i < N; i++) {
-                float d2 = (pts[i] - pos).sqrMagnitude;
-                if (d2 < bestD2) { bestD2 = d2; best = i; }
-            }
-            lastBestK = best;
 
-            bestDist2 = bestD2;
+        // Global search fallback if bike teleports
+        if (Mathf.Sqrt(minSqrDist) > 30f) {
+            for (int i = 0; i < resolutionSamples; i++) {
+                float sqrDist = (_samplePoints[i] - position).sqrMagnitude;
+                if (sqrDist < minSqrDist) { minSqrDist = sqrDist; _lastClosestSampleIndex = i; }
+            }
         }
 
-        // segment projection
-        int aK = bestK;
-        int bK = Mod(bestK + 1, N);
-        Vector3 A = pts[aK];
-        Vector3 B = pts[bK];
-        Vector3 AB = B - A;
-        float ab2 = Mathf.Max(AB.sqrMagnitude, MIN_CURVATURE_DENOMINATOR);
+        // 2. Project position onto the segment between samples
+        int indexA = _lastClosestSampleIndex;
+        int indexB = WrapIndex(_lastClosestSampleIndex + 1, resolutionSamples);
 
-        // tseg is the 0-1 percentage of how far the bike is between point a and b
-        float tSeg = Mathf.Clamp01(Vector3.Dot(pos - A, AB) / ab2);
-        pStar = A + tSeg * AB;
+        Vector3 pointA = _samplePoints[indexA];
+        Vector3 pointB = _samplePoints[indexB];
+        Vector3 segmentVec = pointB - pointA;
+        float segmentLengthSqr = Mathf.Max(segmentVec.sqrMagnitude, EPSILON);
 
-        // tangent (track direction)
-        tHat = AB.normalized;
-        if (tHat.sqrMagnitude < 0.5f)
-            tHat = Vector3.Slerp(tans[aK], tans[bK], tSeg).normalized;
+        float tSegment = Mathf.Clamp01(Vector3.Dot(position - pointA, segmentVec) / segmentLengthSqr);
+        splinePoint = pointA + tSegment * segmentVec;
 
-        // cross track error (lateral offset)
-        Vector3 nRight = Vector3.Cross(tHat, up).normalized;
-        ey = Vector3.Dot(pos - pStar, -nRight);
+        // 3. Determine Orientations
+        tangent = segmentVec.normalized;
 
-        // arc length (total distance along track)
-        float segLen = Vector3.Distance(A, B);
-        float sRaw = cumLen[aK] + tSeg * segLen;
-        sOut = ModF(sRaw, totalLength);
+        // Handle Reversal Logic
+        if (_gameController != null && _gameController.reverseDirection) {
+            tangent = -tangent;
+        }
 
-        // heading error (steering angle vs track angle)
-        Vector3 fwd = Vector3.ProjectOnPlane(bike.forward, up).normalized;
-        Vector3 tPlanar = Vector3.ProjectOnPlane(tHat, up).normalized;
-        hdgErrDeg = Vector3.SignedAngle(fwd, tPlanar, up);
+        // 4. Calculate Lateral Error (Distance from center)
+        Vector3 trackRight = Vector3.Cross(tangent, upVector).normalized;
+        lateralError = Vector3.Dot(position - splinePoint, -trackRight);
 
-        // curvature sampling
-        float curveA = curvatures[aK];
-        float curveB = curvatures[bK];
-        curvatureAmount = Mathf.Lerp(curveA, curveB, tSeg);
+        // 5. Calculate Progress Distance
+        float segmentRealLength = Vector3.Distance(pointA, pointB);
+        float rawTotalDist = _cumulativeDistances[indexA] + (tSegment * segmentRealLength);
+        progressDist = Mathf.Repeat(rawTotalDist, lapTotalLength);
 
-        // determine the raw state (before smoothing)
-        internalState = curvatureAmount < straightThreshold;
+        // 6. Heading Error
+        Vector3 bikeForwardPlanar = Vector3.ProjectOnPlane(bikeTransform.forward, upVector).normalized;
+        Vector3 trackForwardPlanar = Vector3.ProjectOnPlane(tangent, upVector).normalized;
+        headingError = Vector3.SignedAngle(bikeForwardPlanar, trackForwardPlanar, upVector);
+
+        // 7. Curvature Smoothing
+        currentCurvature = Mathf.Lerp(_sampleCurvatures[indexA], _sampleCurvatures[indexB], tSegment);
+        _rawIsStraightState = currentCurvature < straightLineThreshold;
     }
 
-    /// <summary>
-    /// prevents the isonstraight boolean from flickering if the track data is noisy.
-    /// it requires the bike to stay in a state for 'statechangedelay' before switching.
-    /// </summary>
-    void UpdateSmoothing() {
+    private void UpdateStraightStateSmoothing() {
         if (!useSmoothing) {
-            isOnStraight = internalState;
+            isOnStraightTrack = _rawIsStraightState;
             return;
         }
 
-        if (internalState != isOnStraight) {
-            stateTimer += Time.deltaTime;
-            if (stateTimer >= stateChangeDelay) {
-                isOnStraight = internalState;
-                stateTimer = 0f;
+        if (_rawIsStraightState != isOnStraightTrack) {
+            _stateTransitionTimer += Time.deltaTime;
+            if (_stateTransitionTimer >= stateChangeDelay) {
+                isOnStraightTrack = _rawIsStraightState;
+                _stateTransitionTimer = 0f;
             }
         } else {
-            stateTimer = 0f;
+            _stateTransitionTimer = 0f;
         }
     }
 
-    /// <summary>
-    /// shoots a raycast down to find the angle of the ground.
-    /// </summary>
-    Vector3 SampleGroundUp(Vector3 origin) {
-        if (Physics.Raycast(origin + Vector3.up * 2f, Vector3.down, out var hit, 5f, groundMask))
+    private Vector3 CalculateGroundNormal(Vector3 origin) {
+        if (Physics.Raycast(origin + Vector3.up * 2f, Vector3.down, out var hit, 5f, groundLayerMask))
             return hit.normal.normalized;
         return Vector3.up;
     }
 
-    // helper math functions for wrapping around closed loops (0 becomes totallength)
-    int Mod(int x, int m) { int r = x % m; return r < 0 ? r + m : r; }
-    float ModF(float x, float m) { float r = x % m; return r < 0 ? r + m : r; }
+    private int WrapIndex(int x, int m) { int r = x % m; return r < 0 ? r + m : r; }
 
 #if UNITY_EDITOR
-    /// <summary>
-    /// draws a sphere and line in the scene view to visualize track tracking.
-    /// green = straight, red = curved.
-    /// </summary>
     void OnDrawGizmosSelected() {
-        if (pts == null || pts.Length == 0) return;
-        Gizmos.color = isOnStraight ? Color.green : Color.red;
-        Gizmos.DrawWireSphere(nearestPoint, 0.5f);
-        Gizmos.DrawLine(nearestPoint, nearestPoint + tangent * 2f);
+        if (_samplePoints == null) return;
+        Gizmos.color = isOnStraightTrack ? Color.green : Color.red;
+        Gizmos.DrawWireSphere(closestPointOnSpline, 0.5f);
+        Gizmos.DrawLine(closestPointOnSpline, closestPointOnSpline + trackTangentDirection * 2f);
     }
 #endif
 }
