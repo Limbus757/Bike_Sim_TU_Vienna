@@ -12,6 +12,9 @@ public class GameController : MonoBehaviour {
     public DataLogger dataLogger;
     public TextMeshProUGUI endStudyText;
 
+    [Header("Spawn Settings")]
+    public bool reverseDirection = false;
+
     [Header("Auto-Trigger Settings")]
     public GameObject triggerCube;
     public float triggerZOffset = 5.0f;
@@ -75,12 +78,16 @@ public class GameController : MonoBehaviour {
         BezierKnot[] knotArray = selectedSpline.ToArray();
 
         Vector3 startPos = splineContainer.transform.TransformPoint(knotArray[knotIndex].Position);
-        Quaternion startRot = splineContainer.transform.rotation * knotArray[knotIndex].Rotation;
 
-        bikeRigidbody.MovePosition(startPos);
-        bikeRigidbody.MoveRotation(startRot);
+        // calculate rotation, flip 180 degrees if reverseDirection is true
+        Quaternion baseRot = splineContainer.transform.rotation * knotArray[knotIndex].Rotation;
+        Quaternion startRot = reverseDirection ? baseRot * Quaternion.Euler(0, 180, 0) : baseRot;
+
+        bikeRigidbody.position = startPos;
+        bikeRigidbody.rotation = startRot;
 
         if (triggerCube != null) {
+            // trigger is always placed in front of the bike's current facing direction
             triggerCube.transform.position = startPos + (startRot * Vector3.forward * triggerZOffset);
             triggerCube.transform.rotation = startRot;
         }
