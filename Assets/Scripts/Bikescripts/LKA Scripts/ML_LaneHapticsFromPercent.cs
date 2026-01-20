@@ -47,7 +47,7 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour
             return;
         }
 
-        float lanePercent = Mathf.Clamp(config.lanePercent, -100f, 100f);
+        float lanePercent = config.lanePercent;
 
         // How far from center in absolute percent (0..100)
         float absP = Mathf.Abs(lanePercent);

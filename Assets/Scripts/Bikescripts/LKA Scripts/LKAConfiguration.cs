@@ -35,7 +35,7 @@ public class LKAConfiguration : MonoBehaviour {
 
     // Public properties for other scripts to access
     public float RoadHalfWidthMeters => trackWidthMeters / 2.0f;
-    public float DeadZoneMeters => trackWidthMeters * deadZonePercentage;
+    public float LKADeadZoneMeters => trackWidthMeters * deadZonePercentage;
 
     private void Awake() {
         if (frenet == null) frenet = GetComponent<MLClosedSplineFrenet>();
@@ -57,8 +57,8 @@ public class LKAConfiguration : MonoBehaviour {
     /// </summary>
     public float GetNormalizedLKASteeringCrosstrackerror(float deviation) {
         float sign = Mathf.Sign(deviation);
-        float distancePastDeadzone = Mathf.Abs(deviation) - DeadZoneMeters;
-        float usableLaneSpace = RoadHalfWidthMeters - DeadZoneMeters;
+        float distancePastDeadzone = Mathf.Abs(deviation) - LKADeadZoneMeters;
+        float usableLaneSpace = RoadHalfWidthMeters - LKADeadZoneMeters;
 
         float result = (usableLaneSpace > 0) ? (distancePastDeadzone / usableLaneSpace) * sign : 0f;
         return Mathf.Clamp(result, -1f, 1f);

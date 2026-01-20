@@ -21,17 +21,17 @@ public class LaneKeepingAssist : MonoBehaviour {
     public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
-    public float Kp = 15.0f;
-    public float Ki = 0.5f;
-    public float Kd = 5.0f;
+    public float Kp = 0.5f;
+    public float Ki = 0.01f;
+    public float Kd = 0.05f;
 
     [Header("LKA Parameters")]
     public float minSpeedToEngage = 2.0f;
     public float maxHeadingAngle = 90.0f;
 
     [Header("Error Weights (Sum = 1.0)")]
-    [Range(0f, 1f)] public float weightCrosstrack = 0.7f;
-    [Range(0f, 1f)] public float weightHeading = 0.3f;
+    [Range(0f, 1f)] public float weightCrosstrack = 0.8f;
+    [Range(0f, 1f)] public float weightHeading = 0.2f;
 
     [Header("Live PID Debug")]
     public float CurrentError;
@@ -62,12 +62,8 @@ public class LaneKeepingAssist : MonoBehaviour {
         lkaSwitchActive = ReceivedSerialProvider.LkaSwitchState;
         float currentSpeed = ReceivedSerialProvider.SpeedKmh;
 
-        float trackWidth = config.trackWidthMeters;
-        float trackHalfWidth = trackWidth / 2f;
-        float deadZoneMeters = trackWidth * config.deadZonePercentage;
-
+        // Check if system is ready
         bool fullyReady = lkaSwitchActive && frenetSource != null && currentSpeed >= minSpeedToEngage;
-
         if (!fullyReady) {
             HandleDisengagement();
             return;
@@ -75,10 +71,10 @@ public class LaneKeepingAssist : MonoBehaviour {
 
         float deviation = frenetSource.crossTrackError;
 
-        // deadzone check: if inside, motor must be disabled to prevent holding torque
-        if (Mathf.Abs(deviation) < deadZoneMeters) {
+        // deadzone check
+        if (Mathf.Abs(deviation) < config.LKADeadZoneMeters) {
             UpdateVisuals(Color.yellow, true);
-            SetMotorIdle(); // motorEnablePin = false
+            SetMotorIdle();
             return;
         }
 
