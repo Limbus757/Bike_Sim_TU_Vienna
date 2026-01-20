@@ -20,8 +20,8 @@ const int PWM_MAX_LIMIT = 230;   // 90% Duty Cycle (Max Speed)
 uint8_t currentEnVal = 0;
 uint8_t currentDirVal = 0;
 uint8_t currentStePWM = PWM_MIN_LIMIT; // Start at 10% (Zero Speed)
-uint8_t currentVibLPWM = 0;
-uint8_t currentVibRPWM = 0;
+uint8_t currentVibLPWM = 128;
+uint8_t currentVibRPWM = 128;
 
 // --- SAFETY TIMEOUT ---
 unsigned long lastDataReceivedTime = 0;
@@ -66,8 +66,8 @@ void setSafeState() {
   currentEnVal = 0;
   currentDirVal = 0;
   currentStePWM = PWM_MIN_LIMIT; // 10% PWM is Zero Speed
-  currentVibLPWM = 0;
-  currentVibRPWM = 0;
+  currentVibLPWM = 128;
+  currentVibRPWM = 128;
   updateSignals();
 }
 
