@@ -21,10 +21,10 @@ public class LaneKeepingAssist : MonoBehaviour {
     public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
-    public float Kp = 0.15f;
-    public float Ki = 0.02f;
+    public float Kp = 0.2f; // Increased slightly as hardware is now 50% slower
+    public float Ki = 0.01f;
     public float Kd = 0.05f;
-    [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing, 0.01 = heavy smoothing
+    [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
 
     [Header("LKA Parameters")]
     public float minSpeedToEngage = 2.0f;
@@ -42,8 +42,8 @@ public class LaneKeepingAssist : MonoBehaviour {
     private float lastHeadingError = 0f;
     private float smoothedDerivative = 0f;
 
-    private const int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM threshold
-    private const int MAX_MOTOR_PWM = 180; 
+    private const int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM (now 0 RPM)
+    private const int MAX_MOTOR_PWM = 228; // maxon motor 90% PWM (now 500 RPM)
     private bool wasActiveLastFrame = false;
 
     void Awake() {
@@ -52,6 +52,7 @@ public class LaneKeepingAssist : MonoBehaviour {
     }
 
     private void OnValidate() {
+        // keeps a*x + b*y logic balanced where a + b = 1.0
         weightHeading = 1.0f - weightCrosstrack;
     }
 
@@ -74,6 +75,7 @@ public class LaneKeepingAssist : MonoBehaviour {
 
         // normalize heading error (-1 to 1)
         NormalizedHeading = Mathf.Clamp(frenetSource.headingErrorDeg / maxHeadingAngle, -1f, 1f);
+
         // normalize crosstrack error (-1 to 1)
         NormalizedCrosstrack = config.GetNormalizedLKASteeringCrosstrackerror(deviation);
 
@@ -83,36 +85,36 @@ public class LaneKeepingAssist : MonoBehaviour {
         // PID - Proportional
         float p = Kp * CurrentError;
 
-        // PID - Integral (We no longer reset this in the deadzone to prevent the "delay" feeling)
+        // PID - Integral (Persistent: we don't reset this in the deadzone anymore)
         integralError = Mathf.Clamp(integralError + (CurrentError * Time.fixedDeltaTime), -1f, 1f);
         float i = Ki * integralError;
 
-        // PID - Derivative (Calculated on measurement to dampen the "whip")
+        // PID - Derivative (Calculated on heading change for dampening)
         float rawDerivative = (frenetSource.headingErrorDeg - lastHeadingError) / Time.fixedDeltaTime;
         smoothedDerivative = Mathf.Lerp(smoothedDerivative, rawDerivative, derivativeSmoothing);
         float d = Kd * smoothedDerivative;
         lastHeadingError = frenetSource.headingErrorDeg;
 
-        // Deadzone check - We "mute" the motor but keep the PID loop running
+        // deadzone check - Disable motor drive but keep PID "warm"
         if (Mathf.Abs(deviation) < config.LKADeadZoneMeters) {
             UpdateVisuals(Color.yellow, true);
-            motorEnablePin = false; // let off holding torque
+            motorEnablePin = false; // releases torque
             motorPWM = MIN_MOTOR_PWM;
             isEngaged = false;
             return;
         }
 
-        // Output mapping (P + I - D to ensure damping opposes the motion)
+        // output mapping (Subtracting D dampens the rotation speed)
         float rawOutput = p + i - d;
         float steeringEffort = Mathf.Clamp(rawOutput, -1f, 1f);
 
-        // PWM mapping with Power Curve (Square) for finer control when wheel is in the air
+        // PWM mapping with Power Curve for smoother response in the air
         motorEnablePin = true;
         isEngaged = true;
         motorDirection = steeringEffort > 0;
 
         float effortMagnitude = Mathf.Abs(steeringEffort);
-        float curvedEffort = effortMagnitude * effortMagnitude; // makes low-effort movements much softer
+        float curvedEffort = effortMagnitude * effortMagnitude; // quadratic curve
 
         motorPWM = Mathf.RoundToInt(Mathf.Lerp(MIN_MOTOR_PWM, MAX_MOTOR_PWM, curvedEffort));
 
@@ -122,10 +124,10 @@ public class LaneKeepingAssist : MonoBehaviour {
 
     private void SetMotorIdle() {
         isEngaged = false;
-        motorEnablePin = false;
+        motorEnablePin = false; // disables power stage
         motorPWM = MIN_MOTOR_PWM;
 
-        // fully reset variables only on hard disengagement/off-switch
+        // Full reset of PID memory for hard stops/disengagement
         CurrentError = 0f;
         integralError = 0f;
         lastHeadingError = 0f;
