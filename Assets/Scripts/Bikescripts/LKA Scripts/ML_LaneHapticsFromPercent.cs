@@ -7,16 +7,7 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour
 
     [Header("Input")]
     [Tooltip("Source providing lanePercent (-100..+100). If null, will try GetComponent.")]
-    public LanePercentFromCenter lanePercentSource;
-
-    [Header("Thresholds (Percent)")]
-    [Tooltip("Below this absolute lane % there is no vibration (deadzone). Example: 40 means start at |lanePercent| >= 40.")]
-    [Range(0f, 100f)]
-    public float startPercent = 40f;
-
-    [Tooltip("At this absolute lane % vibration reaches maximum (still before LKA). Example: 80.")]
-    [Range(0f, 100f)]
-    public float maxPercent = 80f;
+    public LKAConfiguration config;
 
     [Header("Response Curve")]
     [Tooltip("Maps normalized distance (0..1) to intensity (0..1). X=0 at startPercent, X=1 at maxPercent.")]
@@ -45,53 +36,38 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour
     private float _pwmLeftVel;
     private float _pwmRightVel;
 
-    private void Awake()
-    {
-        if (lanePercentSource == null)
-            lanePercentSource = GetComponent<LanePercentFromCenter>();
-
-        // Safety: ensure sensible thresholds
-        startPercent = Mathf.Clamp(startPercent, 0f, 100f);
-        maxPercent = Mathf.Clamp(maxPercent, 0f, 100f);
-        if (maxPercent < startPercent) maxPercent = startPercent;
+    private void Awake() {
+        if (config == null) config = GetComponent<LKAConfiguration>();
     }
 
-    private void Update()
-    {
-        if (lanePercentSource == null)
-        {
+    private void Update() {
+        if (config == null) {
             pwmLeft = pwmRight = 0f;
             pwmLeft255 = pwmRight255 = 0;
             return;
         }
 
-        float lanePercent = Mathf.Clamp(lanePercentSource.lanePercent, -100f, 100f);
+        float lanePercent = Mathf.Clamp(config.lanePercent, -100f, 100f);
 
         // How far from center in absolute percent (0..100)
         float absP = Mathf.Abs(lanePercent);
 
         // Normalize to 0..1 within [startPercent..maxPercent]
         float t = 0f;
-        if (absP <= startPercent)
-        {
+        if (absP <= config.vibrationStartPercent) {
             t = 0f; // deadzone
-        }
-        else if (maxPercent <= startPercent + 0.0001f)
-        {
+        } else if (config.vibrationMaxPercent <= config.vibrationStartPercent + 0.0001f) {
             // Degenerate case: start == max -> step behavior
             t = 1f;
-        }
-        else
-        {
-            t = Mathf.InverseLerp(startPercent, maxPercent, absP);
+        } else {
+            t = Mathf.InverseLerp(config.vibrationStartPercent, config.vibrationMaxPercent, absP);
         }
 
         // Map through curve
         float intensity = Mathf.Clamp01(intensityCurve.Evaluate(t)) * gain;
 
         // Optional minimum when active (only if t>0)
-        if (t > 0f)
-            intensity = Mathf.Max(intensity, minPwmWhenActive);
+        if (t > 0f) intensity = Mathf.Max(intensity, minPwmWhenActive);
 
         intensity = Mathf.Clamp01(intensity);
 
