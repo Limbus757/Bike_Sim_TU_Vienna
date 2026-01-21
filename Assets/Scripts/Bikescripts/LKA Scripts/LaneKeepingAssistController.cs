@@ -22,8 +22,8 @@ public class LaneKeepingAssistController : MonoBehaviour {
 
     [Header("PID Controller Gains")]
     public float Kp = 0.2f;
-    public float Ki = 0.01f;
-    public float Kd = 0.05f;
+    public float Ki = 0.00f;
+    public float Kd = 0.00f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
 
     [Header("LKA Parameters")]
