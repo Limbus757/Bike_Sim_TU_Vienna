@@ -62,6 +62,8 @@ public class SentSerialController : MonoBehaviour
     private object _writeLock = new object();
     private string _latestMessageToSend = "";
 
+    private string _safeStateMessage = "0,0,0,0,0\n";
+
     private const int DEFAULT_PWM_UNUSED = 0;
 
     void Awake()
@@ -126,38 +128,30 @@ public class SentSerialController : MonoBehaviour
     private void WriteData() {
         try {
             serialPort = new SerialPort(portName, baudRate);
-            serialPort.NewLine = "\n";
             serialPort.Open();
-            Debug.Log($"[Serial TX] Opened port {portName} at {baudRate}. Starting write loop.");
 
-            uint lastTime = (uint)Environment.TickCount;
-
-            while (isWriting)
-            {
-                if (serialPort.IsOpen)
-                {
+            while (isWriting) {
+                if (serialPort.IsOpen) {
                     string message;
-                    lock (_writeLock)
-                    {
-                        message = _latestMessageToSend;
-                    }
-
-                    // Use Write() as the message already contains the newline character.
+                    lock (_writeLock) { message = _latestMessageToSend; }
                     serialPort.Write(message);
-
-                    uint now = (uint)Environment.TickCount;
-                    actualSendPeriodMs = now - lastTime;
-                    lastTime = now;
                 }
-
                 Thread.Sleep(sendIntervalMs);
             }
+
+            // application quit / thread stopping
+            if (serialPort.IsOpen) {
+                Debug.Log("[Serial TX] Sending Safety Shutdown Packet...");
+                serialPort.Write(_safeStateMessage);
+                serialPort.BaseStream.Flush();  // ensure data is pushed out before closing
+            }
+
         } catch (Exception e) {
-            Debug.LogError($"[Serial TX Error] Write failed or port error: {e.Message}");
+            Debug.LogError($"[Serial TX Error]: {e.Message}");
         } finally {
             if (serialPort != null && serialPort.IsOpen) {
                 serialPort.Close();
-                Debug.Log("[Serial TX] Port closed.");
+                Debug.Log("[Serial TX] Port closed safely.");
             }
         }
     }
@@ -168,10 +162,13 @@ public class SentSerialController : MonoBehaviour
     void OnApplicationQuit() { StopSerialThread(); }
 
     private void StopSerialThread() {
+        if (!isWriting) return;
         isWriting = false;
-        if (writeThread != null && writeThread.IsAlive)
-        {
-            writeThread.Join(200);
+
+        // wait for the thread to finish its final safety write and close the port
+        if (writeThread != null && writeThread.IsAlive) {
+            // Increase timeout slightly to ensure the final write completes
+            writeThread.Join(500);
         }
     }
 }

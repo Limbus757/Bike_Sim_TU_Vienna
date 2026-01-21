@@ -97,7 +97,7 @@ public class DataLogger : MonoBehaviour
         line.Append(frenetController != null ? (frenetController.isOnStraightTrack ? "1" : "0") : "0").Append(","); // straight check
         line.Append(frenetController != null ? frenetController.currentCurvature.ToString("F6") : "0").Append(","); // curvature
         line.Append(frenetController != null ? frenetController.crossTrackErrorMeters.ToString("F4") : "0").Append(","); // cte meters
-        line.Append(frenetController != null ? frenetController.headingErrorDegrees.ToString("F4") : "0"); // heading error
+        line.Append(frenetController != null ? frenetController.headingErrorDegrees.ToString("F4") : "0").Append(","); // heading error
 
         // --- lka system ---
         line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(","); // switch state
