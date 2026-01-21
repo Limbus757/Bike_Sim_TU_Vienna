@@ -1,6 +1,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using static LKAConfiguration;
 
 /// <summary>
 /// Generates left/right handlebar haptic intensities based on normalized lane position.
@@ -53,19 +54,34 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
 
     private void Update() {
         if (config == null) { // fail-safe
-            pwmLeft = pwmRight = 0f;
-            pwmLeft255 = pwmRight255 = 0;
+            pwmLeft = pwmRight = 128f;
+            pwmLeft255 = pwmRight255 = 128;
             return;
         }
 
         // Lane position normalized to (-1;1)
         // -1 = left edge, 1 = right edge
         float lane = config.crossTrackErrorNormalized;
-
+        if (config.mode == HapticsMode.OFF)
+        {
+            ApplyOutputs(128f, 128f);
+            return;
+        }
         // Distance from lane center, ignoring side
         // Used to determine vibration intensity only
         float absLane = Mathf.Abs(lane);
+        if (config.mode == HapticsMode.FIXED)
+        {
+            bool outsideDeadzone = absLane >= config.hapticsDeadZonePercentage;
 
+            float f_intensity = outsideDeadzone ? 0f : 128f;
+
+            float f_targetLeft = (lane < 0f) ? f_intensity : 128f;
+            float f_targetRight = (lane > 0f) ? f_intensity : 128f;
+
+            ApplyOutputs(f_targetLeft, f_targetRight);
+            return;
+        }
         // Convert absolute lane distance into a 0..1 parameter
         // using thresholds defined in LKAConfiguration.
         float t = Mathf.InverseLerp(
@@ -92,8 +108,15 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
             pwmRight = Mathf.SmoothDamp(pwmRight, targetRight, ref _rightVel, smoothTime);
         }
 
-        pwmLeft255 = 123 - Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 123f), 0, 123);
-        pwmRight255 = 123 - Mathf.Clamp(Mathf.RoundToInt(pwmRight * 123f), 0, 123);
+        pwmLeft255 = 128 - Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 128f), 0, 128);
+        pwmRight255 = 128 - Mathf.Clamp(Mathf.RoundToInt(pwmRight * 128f), 0, 128);
+    }
+    private void ApplyOutputs(float left, float right)
+    {
+        pwmLeft = left;
+        pwmRight = right;
+        pwmLeft255 = 128 - Mathf.Clamp(Mathf.RoundToInt(pwmLeft * 128f), 0, 128);
+        pwmRight255 = 128 - Mathf.Clamp(Mathf.RoundToInt(pwmRight * 128f), 0, 128);
     }
 }
 
