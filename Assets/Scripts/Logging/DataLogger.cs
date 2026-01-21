@@ -17,9 +17,9 @@ public class DataLogger : MonoBehaviour
     private bool isLogging = false;
     private StreamWriter sw;
 
-    string header = "Time,Lap,s_Pos,BikeSpeed,SteerAngle,FrontBrake,BackBrake," + // telemetry
+    string header = "Time,LapNr,currentTrackDistance,BikeSpeed,SteerAngle,FrontBrake,BackBrake," + // telemetry
                     "IsOnStraight,Curvature,CrossTrackError,HeadingError," + // environment
-                    "LkaSwitchState,LkaEngaged,LkaNorm,MotorDir,MotorPWM,TotalPIDError," + // lka system
+                    "LkaSwitchState,LkaEngaged,LkaNormalizedDeviation,MotorDir,MotorPWM,TotalPIDError," + // lka system
                     "HapticLeftNorm,HapticRightNorm,HapticLeftPWM,HapticRightPWM"; // haptic system
                    
     void Awake() {
@@ -48,8 +48,9 @@ public class DataLogger : MonoBehaviour
 
         // setup filename
         string participantID = (gameController != null) ? gameController.studyParticipantId.ToString() : "0";
+        string trialCondition = (gameController != null) ? gameController.currentCondition.ToString() : "ConditionError";
         string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
-        string fileName = $"{participantID}_Log_{timestamp}.csv";
+        string fileName = $"{participantID}_{trialCondition}_Log_{timestamp}.csv";
 
         filePath = Path.Combine(studyFolderPath, fileName);
 

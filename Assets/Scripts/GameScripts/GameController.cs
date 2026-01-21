@@ -3,9 +3,21 @@ using UnityEngine.Splines;
 using TMPro;
 
 public class GameController : MonoBehaviour {
+
+    public enum StudyConditions {
+        BaselineCW,
+        BaselineCC,
+        HapticsFixedCW,
+        HapticsFixedCC,
+        HapticsAdaptiveCW,
+        HapticsAdaptiveCC,
+    }
+
     [Header("Study Parameters")]
     public string studyName = "DefaultStudy";
     public int studyParticipantId = 1;
+    public StudyConditions currentCondition = StudyConditions.BaselineCW;
+
 
     [Header("Study Logic")]
     public int totalRoundsToComplete = 3;
@@ -64,6 +76,9 @@ public class GameController : MonoBehaviour {
 
     private void FinishStudy() {
         studyFinished = true;
+        // Example of how to use the condition in your logic or logging
+        Debug.Log($"Finished study with condition: {currentCondition.ToString()}");
+
         if (dataLogger != null) dataLogger.StopLogger();
         if (endStudyText != null) {
             endStudyText.text = "Study is Over\nThank you for participating!";
