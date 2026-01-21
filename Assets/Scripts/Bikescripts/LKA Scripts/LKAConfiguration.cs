@@ -18,11 +18,11 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Tooltip("Percentage of total lane width considered LKA deadzone.")]
     [Range(0f, 1f)]
-    public float lkaDeadZonePercentage = 0.1f;
+    public float lkaDeadZonePercentage = 0.25f;
 
     [Header("Haptics Thresholds (Normalized Lane Units)")]
     [Range(0f, 1f)]
-    public float hapticsDeadZonePercentage = 0.3f;
+    public float hapticsDeadZonePercentage = 0.20f;
 
     [Range(0f, 1f)]
     public float hapticsMaxVibPercentage = 0.8f;

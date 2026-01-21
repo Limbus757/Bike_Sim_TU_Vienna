@@ -21,13 +21,13 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
-    public float Kp = 0.2f;
+    public float Kp = 1.0f;
     public float Ki = 0.00f;
     public float Kd = 0.00f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
 
     [Header("LKA Parameters")]
-    public float minSpeedToEngage = 2.0f;
+    public float minSpeedToEngage = 0f;
     public float maxHeadingAngle = 90.0f;
 
     [Header("Error Weights (Sum = 1.0)")]
