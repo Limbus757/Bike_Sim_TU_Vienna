@@ -7,23 +7,29 @@ using System.Text;
 public class DataLogger : MonoBehaviour
 {
     private BikeController bikeController;
-    private LaneKeepingAssist lkaController;
+    private LaneKeepingAssistController lkaController;
     private GameController gameController;
     private MLClosedSplineFrenet frenetController;
+    private LKAConfiguration lkaConfig;
+    private ML_LaneHapticsFromPercent hapticsController;
 
     private string filePath;
     private bool isLogging = false;
     private StreamWriter sw;
 
-    string header = "Time,BikeSpeed,SteerAngle,FrontBrake,BackBrake," +
-                    "LkaSwitchState,LkaEngaged,MotorDir,MotorPWM," +
-                    "IsOnStraight,Curvature,CrossTrackError,HeadingError";
-
+    string header = "Time,Lap,s_Pos,BikeSpeed,SteerAngle,FrontBrake,BackBrake," + // telemetry
+                    "IsOnStraight,Curvature,CrossTrackError,HeadingError," + // environment
+                    "LkaSwitchState,LkaEngaged,LkaNorm,MotorDir,MotorPWM,TotalPIDError," + // lka system
+                    "HapticLeftNorm,HapticRightNorm,HapticLeftPWM,HapticRightPWM"; // haptic system
+                   
     void Awake() {
         bikeController = FindObjectOfType<BikeController>();
-        lkaController = FindObjectOfType<LaneKeepingAssist>();
+        lkaController = FindObjectOfType<LaneKeepingAssistController>();
         frenetController = FindObjectOfType<MLClosedSplineFrenet>();
         gameController = FindObjectOfType<GameController>();
+        hapticsController = FindObjectOfType<ML_LaneHapticsFromPercent>();
+        lkaConfig = FindObjectOfType<LKAConfiguration>();
+
     }
 
     void Start() {
@@ -73,24 +79,39 @@ public class DataLogger : MonoBehaviour
         if (isLogging) LogCurrentData();
     }
 
-    private void LogCurrentData()
-    {
-        if (bikeController == null || lkaController == null || frenetController == null || sw == null) return;
+    private void LogCurrentData() {
+        if (bikeController == null || lkaController == null || sw == null) return;
 
         StringBuilder line = new StringBuilder();
-        line.Append(Time.time.ToString("F4")).Append(",");
-        line.Append(bikeController.BikeSpeed.ToString("F4")).Append(",");
-        line.Append(bikeController.SteeringAngle.ToString("F4")).Append(",");
-        line.Append(bikeController.FrontBrakeforce.ToString("F4")).Append(",");
-        line.Append(bikeController.BackBrakeforce.ToString("F4")).Append(",");
-        line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(",");
-        line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
-        line.Append(lkaController.motorDirection ? "1" : "0").Append(",");
-        line.Append(lkaController.motorPWM).Append(",");
-        line.Append(frenetController.isOnStraight ? "1" : "0").Append(",");
-        line.Append(frenetController.curvatureAmount.ToString("F6")).Append(",");
-        line.Append(frenetController.crossTrackError.ToString("F4")).Append(",");
-        line.Append(frenetController.headingErrorDeg.ToString("F4"));
+
+        // --- telemetry ---
+        line.Append(Time.time.ToString("F4")).Append(","); // time
+        line.Append(gameController != null ? gameController.currentLap : 0).Append(","); // lap
+        line.Append(frenetController != null ? frenetController.currentDistanceOnTrack.ToString("F3") : "0").Append(","); // s_pos
+        line.Append(bikeController.BikeSpeed.ToString("F4")).Append(","); // speed
+        line.Append(bikeController.SteeringAngle.ToString("F4")).Append(","); // steer angle
+        line.Append(bikeController.FrontBrakeforce.ToString("F4")).Append(","); // front brake
+        line.Append(bikeController.BackBrakeforce.ToString("F4")).Append(","); // back brake
+
+        // --- environment and raw errors ---
+        line.Append(frenetController != null ? (frenetController.isOnStraightTrack ? "1" : "0") : "0").Append(","); // straight check
+        line.Append(frenetController != null ? frenetController.currentCurvature.ToString("F6") : "0").Append(","); // curvature
+        line.Append(frenetController != null ? frenetController.crossTrackErrorMeters.ToString("F4") : "0").Append(","); // cte meters
+        line.Append(frenetController != null ? frenetController.headingErrorDegrees.ToString("F4") : "0"); // heading error
+
+        // --- lka system ---
+        line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(","); // switch state
+        line.Append(lkaController.isEngaged ? "1" : "0").Append(","); // engaged
+        line.Append(lkaConfig != null ? lkaConfig.lkaCrossTrackErrorNormalized.ToString("F4") : "0").Append(","); // lka norm
+        line.Append(lkaController.motorDirection ? "1" : "0").Append(","); // motor dir
+        line.Append(lkaController.motorPWM).Append(","); // motor pwm
+        line.Append(lkaController.CurrentError.ToString("F4")).Append(","); // total pid error
+
+        // --- haptic system ---
+        line.Append(hapticsController != null ? hapticsController.pwmLeft.ToString("F4") : "0").Append(","); // haptic left 0-1
+        line.Append(hapticsController != null ? hapticsController.pwmRight.ToString("F4") : "0").Append(","); // haptic right 0-1
+        line.Append(hapticsController != null ? hapticsController.pwmLeft255 : 0).Append(","); // haptic left pwm
+        line.Append(hapticsController != null ? hapticsController.pwmRight255 : 0).Append(","); // haptic right pwm
 
         sw.WriteLine(line.ToString());
     }

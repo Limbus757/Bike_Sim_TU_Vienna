@@ -1,6 +1,6 @@
 using UnityEngine;
 
-public class LaneKeepingAssist : MonoBehaviour {
+public class LaneKeepingAssistController : MonoBehaviour {
     [Header("Script References")]
     public MLClosedSplineFrenet frenetSource;
     public BikeController bikeController;

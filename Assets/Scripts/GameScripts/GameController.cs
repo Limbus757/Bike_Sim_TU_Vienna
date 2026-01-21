@@ -19,7 +19,7 @@ public class GameController : MonoBehaviour {
     public GameObject triggerCube;
     public float triggerZOffset = 5.0f;
 
-    private int currentLap = 0;
+    public int currentLap = 0;
     private bool studyStarted = false;
     private bool studyFinished = false;
 

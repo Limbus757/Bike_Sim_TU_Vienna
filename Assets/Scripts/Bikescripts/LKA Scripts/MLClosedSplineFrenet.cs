@@ -30,7 +30,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     public bool isOnStraightTrack;
     public float currentCurvature;
     public float crossTrackErrorMeters; // Was 'ey'
-    public float totalDistanceTravelled;  // Was 's'
+    public float currentDistanceOnTrack;  // Was 's'
     public float headingErrorDegrees;
     public Vector3 closestPointOnSpline;
     public Vector3 trackTangentDirection;
@@ -95,7 +95,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
             bikeTransform.position,
             currentSurfaceNormal,
             out crossTrackErrorMeters,
-            out totalDistanceTravelled,
+            out currentDistanceOnTrack,
             out closestPointOnSpline,
             out trackTangentDirection,
             out headingErrorDegrees

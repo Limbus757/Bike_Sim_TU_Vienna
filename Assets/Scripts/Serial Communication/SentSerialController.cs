@@ -15,7 +15,7 @@ public class SentSerialController : MonoBehaviour
     // --- Data Source ---
     [Header("0. Data Source")]
     [Tooltip("The LaneKeepingAssist script that determines the motor control values.")]
-    public LaneKeepingAssist laneKeepingAssist;
+    public LaneKeepingAssistController laneKeepingAssist;
     [Tooltip("The Haptic script that determines the motor control values.")]
     public ML_LaneHapticsFromPercent Haptics;
 
