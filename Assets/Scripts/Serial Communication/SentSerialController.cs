@@ -62,7 +62,7 @@ public class SentSerialController : MonoBehaviour
     private object _writeLock = new object();
     private string _latestMessageToSend = "";
 
-    private string _safeStateMessage = "0,0,0,0,0\n";
+    private string _safeStateMessage = "0,0,0,128,128\n";
 
     private const int DEFAULT_PWM_UNUSED = 0;
 
