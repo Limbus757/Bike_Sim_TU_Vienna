@@ -27,12 +27,12 @@ public class LaneKeepingAssistController : MonoBehaviour {
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
 
     [Header("LKA Parameters")]
-    public float minSpeedToEngage = 0f;
+    public float minSpeedToEngage = 8f;
     public float maxHeadingAngle = 90.0f;
 
     [Header("Error Weights (Sum = 1.0)")]
-    [Range(0f, 1f)] public float weightCrosstrack = 0.8f;
-    [Range(0f, 1f)] public float weightHeading = 0.2f;
+    [Range(0f, 1f)] public float weightCrosstrack = 0.9f;
+    [Range(0f, 1f)] public float weightHeading = 0.1f;
 
     [Header("Live PID Debug")]
     public float CurrentError;
@@ -108,9 +108,8 @@ public class LaneKeepingAssistController : MonoBehaviour {
         motorDirection = steeringEffort > 0;
 
         float effortMagnitude = Mathf.Abs(steeringEffort);
-        float curvedEffort = effortMagnitude * effortMagnitude; // quadratic curve
-
-        motorPWM = Mathf.RoundToInt(Mathf.Lerp(MIN_MOTOR_PWM, MAX_MOTOR_PWM, curvedEffort));
+        
+        motorPWM = Mathf.RoundToInt(Mathf.Lerp(MIN_MOTOR_PWM, MAX_MOTOR_PWM, effortMagnitude));
 
         UpdateVisuals(Color.green, true);
         wasActiveLastFrame = true;

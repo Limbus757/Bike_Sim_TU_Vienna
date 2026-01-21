@@ -14,11 +14,11 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Lane Geometry")]
     [Tooltip("Total drivable lane width in meters.")]
-    public float trackWidthMeters = 3.0f;
+    public float trackWidthMeters = 2.0f;
 
     [Tooltip("Percentage of total lane width considered LKA deadzone.")]
     [Range(0f, 1f)]
-    public float lkaDeadZonePercentage = 0.25f;
+    public float lkaDeadZonePercentage = 0.4f;
     public enum HapticsMode
     {
         OFF,
@@ -32,10 +32,10 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Haptics Thresholds (Normalized Lane Units)")]
     [Range(0f, 1f)]
-    public float hapticsDeadZonePercentage = 0.20f;
+    public float hapticsDeadZonePercentage = 0.2f;
 
     [Range(0f, 1f)]
-    public float hapticsMaxVibPercentage = 0.8f;
+    public float hapticsMaxVibPercentage = 0.4f;
 
     [Header("Live Lane Position (Read-only)")]
     public float crossTrackErrorNormalized;
