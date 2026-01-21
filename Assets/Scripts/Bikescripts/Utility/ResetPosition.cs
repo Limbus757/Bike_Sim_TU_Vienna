@@ -9,6 +9,7 @@ public class ResetPosition : MonoBehaviour {
     [SerializeField] Camera playerHead;
 
     public void Update() {
+        bool bRight = OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.RTouch);
         if (Input.GetKeyDown("v") || OVRInput.Get(OVRInput.Button.Two)) {
             ResetViewPosition();
         }
