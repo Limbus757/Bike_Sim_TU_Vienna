@@ -25,7 +25,7 @@ uint8_t currentVibRPWM = 128;
 
 // --- SAFETY TIMEOUT ---
 unsigned long lastDataReceivedTime = 0;
-const unsigned long TIMEOUT_THRESHOLD_MS = 2000; 
+const unsigned long TIMEOUT_THRESHOLD_MS = 200; 
 bool firstDataReceived = false; // Flag to ensure timeout only starts after first input
 
 Adafruit_DRV2605 drv;
@@ -100,8 +100,7 @@ void setup() {
     while (1);
   }
  */ 
-  
-
+ 
   // Keep both haptic drivers enabled for PWM operation
   digitalWrite(VIB_EN_LEFT, HIGH);
   digitalWrite(VIB_EN_RIGHT, HIGH);
@@ -109,33 +108,39 @@ void setup() {
 }
 
 void loop() {
-  // 1. Process Serial Input
+  // 1. Check if there is data
   if (Serial.available() > 0) {
-    currentEnVal = Serial.parseInt();   
-    currentDirVal = Serial.parseInt();  
-    currentStePWM = Serial.parseInt();  
-    currentVibLPWM = Serial.parseInt(); 
-    currentVibRPWM = Serial.parseInt(); 
+    
+    // read the line until the \n terminator
+    String incomingLine = Serial.readStringUntil('\n');
 
-    // Flush any trailing newline/carriage return
-    while (Serial.available() > 0 && (Serial.peek() == '\n' || Serial.peek() == '\r')) {
-      Serial.read();
+    if (incomingLine.length() > 0) {
+      int en, dir, ste, vibL, vibR;
+
+      // sscanf returns the number of variables successfully filled
+      // We expect 5 values based on your Unity string: "{0},{1},{2},{3},{4}\n"
+      int parsedCount = sscanf(incomingLine.c_str(), "%d,%d,%d,%d,%d", 
+                               &en, &dir, &ste, &vibL, &vibR);
+
+      if (parsedCount == 5) {
+        currentEnVal = (uint8_t)en;
+        currentDirVal = (uint8_t)dir;
+        currentStePWM = (uint8_t)ste;
+        currentVibLPWM = (uint8_t)vibL;
+        currentVibRPWM = (uint8_t)vibR;
+
+        // reset safety watchdog
+        if (!firstDataReceived) firstDataReceived = true;
+        lastDataReceivedTime = millis();
+
+        // push new values to the physical pins
+        updateSignals();
+      }
     }
-
-    // Trigger the timeout logic only after the first message is received
-    if (!firstDataReceived) {
-      firstDataReceived = true;
-    }
-
-    lastDataReceivedTime = millis(); 
-    updateSignals();
   }
 
-  // 2. Safety Timeout Logic
-  // Only activates if firstDataReceived is true AND time has elapsed
-  /*
+  // safety timeout logic
   if (firstDataReceived && (millis() - lastDataReceivedTime > TIMEOUT_THRESHOLD_MS)) {
     setSafeState();
   }
-  */
 }
