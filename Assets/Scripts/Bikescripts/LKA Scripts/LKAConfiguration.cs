@@ -1,19 +1,20 @@
 using UnityEngine;
 
-/// <summary>
-/// Central configuration for Lane Keeping Assist and Lane-based Haptics.
-/// </summary>
 public class LKAConfiguration : MonoBehaviour {
     [Header("Frenet Source")]
     public MLClosedSplineFrenet frenet;
 
     [Header("Lane Geometry")]
-    [Tooltip("Total drivable lane width in meters.")] 
     public float trackWidthMeters = 4.0f;
-    [Range(0f, 1f)] public float lkaDeadZonePercentage = 0.5f;
+    [Range(0f, 1f)] public float lkaDeadZonePercentage = 0.4f;
+
+    [Header("LKA Hysteresis Thresholds")]
+    [Tooltip("How much further past the deadzone to ENGAGE.")]
+    public float engageBuffer = 0f;
+    [Tooltip("How much inside the deadzone to DISENGAGE.")]
+    public float disengageBuffer = 0.5f;
 
     [Header("Safety Parameters")]
-    [Tooltip("Minimum speed required from the bike for LKA to engage.")]
     public float minSpeedToEngage = 8f;
 
     public enum HapticsMode { OFF, FIXED, ADAPTIVE }
@@ -21,9 +22,10 @@ public class LKAConfiguration : MonoBehaviour {
     [Header("Haptics Settings")]
     public HapticsMode mode = HapticsMode.ADAPTIVE;
     [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.2f;
-    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.45f;
+    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.4f;
 
-    [Header("Live Lane Position (Read-only)")]
+    [Header("Live Status (Read-only)")]
+    public bool isWithinActiveZone = false;
     [Range(-1f, 1f)] public float crossTrackErrorNormalized;
     [Range(-1f, 1f)] public float lkaCrossTrackErrorNormalized;
 
@@ -36,15 +38,26 @@ public class LKAConfiguration : MonoBehaviour {
     private void Update() {
         if (frenet == null) return;
 
+        // 1. Calculate Raw Normalization (Used for Haptics)
         crossTrackErrorNormalized = Mathf.Clamp((frenet.crossTrackErrorMeters / RoadHalfWidthMeters), -1f, 1f);
-        lkaCrossTrackErrorNormalized = ApplyDeadzone(crossTrackErrorNormalized, lkaDeadZonePercentage);
-    }
+        float absRaw = Mathf.Abs(crossTrackErrorNormalized);
 
-    private float ApplyDeadzone(float normalizedError, float deadzonePercent) {
-        float absError = Mathf.Abs(normalizedError);
-        if (absError <= deadzonePercent) return 0f;
+        // 2. LKA State Logic (Hysteresis)
+        float engageLine = lkaDeadZonePercentage + engageBuffer;
+        float disengageLine = lkaDeadZonePercentage - disengageBuffer;
 
-        float remapped = (absError - deadzonePercent) / (1f - deadzonePercent);
-        return remapped * Mathf.Sign(normalizedError);
+        if (!isWithinActiveZone && absRaw > engageLine) {
+            isWithinActiveZone = true;
+        } else if (isWithinActiveZone && absRaw < disengageLine) {
+            isWithinActiveZone = false;
+        }
+
+        // 3. Calculate LKA Output Error (Remapped so 0 is the deadzone edge)
+        if (isWithinActiveZone) {
+            float remapped = (absRaw - lkaDeadZonePercentage) / (1f - lkaDeadZonePercentage);
+            lkaCrossTrackErrorNormalized = Mathf.Clamp01(remapped) * Mathf.Sign(crossTrackErrorNormalized);
+        } else {
+            lkaCrossTrackErrorNormalized = 0f;
+        }
     }
 }
