@@ -21,8 +21,8 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int motorPWM = 26;
 
     [Header("PID Controller Gains")]
-    public float Kp = 1.0f;
-    public float Ki = 0.00f;
+    public float Kp = 0.6f;
+    public float Ki = 0.05f;
     public float Kd = 0.00f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f; // 1.0 = no smoothing
 
@@ -42,8 +42,8 @@ public class LaneKeepingAssistController : MonoBehaviour {
     private float lastHeadingError = 0f;
     private float smoothedDerivative = 0f;
 
-    private const int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM 
-    private const int MAX_MOTOR_PWM = 228; // maxon motor 90% PWM
+    public int MIN_MOTOR_PWM = 25; // maxon motor 10% PWM 
+    public int MAX_MOTOR_PWM = 228; // maxon motor 90% PWM
     private bool wasActiveLastFrame = false;
 
     void Awake() {
@@ -109,7 +109,7 @@ public class LaneKeepingAssistController : MonoBehaviour {
 
         float effortMagnitude = Mathf.Abs(steeringEffort);
         
-        motorPWM = Mathf.RoundToInt(Mathf.Lerp(MIN_MOTOR_PWM, MAX_MOTOR_PWM, effortMagnitude));
+        motorPWM = Mathf.RoundToInt(Mathf.Lerp(55, MAX_MOTOR_PWM, effortMagnitude));
 
         UpdateVisuals(Color.green, true);
         wasActiveLastFrame = true;

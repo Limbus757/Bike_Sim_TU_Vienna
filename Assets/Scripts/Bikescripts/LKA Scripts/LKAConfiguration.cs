@@ -14,11 +14,16 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Lane Geometry")]
     [Tooltip("Total drivable lane width in meters.")]
-    public float trackWidthMeters = 2.0f;
+    public float trackWidthMeters = 4.0f;
 
     [Tooltip("Percentage of total lane width considered LKA deadzone.")]
     [Range(0f, 1f)]
-    public float lkaDeadZonePercentage = 0.4f;
+    public float lkaDeadZonePercentage = 0.5f;
+
+    [Header("LKA Saftey Parameters")]
+    public float minSpeedToEngage = 8f;
+
+    public float maxHeadingAngle = 90.0f;
     public enum HapticsMode
     {
         OFF,
@@ -35,9 +40,10 @@ public class LKAConfiguration : MonoBehaviour {
     public float hapticsDeadZonePercentage = 0.2f;
 
     [Range(0f, 1f)]
-    public float hapticsMaxVibPercentage = 0.4f;
+    public float hapticsMaxVibPercentage = 0.45f;
 
     [Header("Live Lane Position (Read-only)")]
+    [Range(-1f, 1f)]
     public float crossTrackErrorNormalized;
     
     public float lkaCrossTrackErrorNormalized;
@@ -70,7 +76,7 @@ public class LKAConfiguration : MonoBehaviour {
     private void Update() {
         if (frenet == null) return;
 
-        crossTrackErrorNormalized = Mathf.Clamp(frenet.crossTrackErrorMeters / RoadHalfWidthMeters, -1f, 1f);
+        crossTrackErrorNormalized = Mathf.Clamp((frenet.crossTrackErrorMeters / RoadHalfWidthMeters), -1f, 1f);
 
         lkaCrossTrackErrorNormalized = ApplyDeadzone(crossTrackErrorNormalized, lkaDeadZonePercentage);
     }
