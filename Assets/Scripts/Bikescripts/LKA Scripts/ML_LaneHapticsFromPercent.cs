@@ -56,6 +56,8 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
         if (config == null) { // fail-safe
             pwmLeft = pwmRight = 128f;
             pwmLeft255 = pwmRight255 = 128;
+            pwmLeft255 = pwmRight255 = 128;
+
             return;
         }
 
@@ -64,7 +66,7 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
         float lane = config.crossTrackErrorNormalized;
         if (config.mode == HapticsMode.OFF)
         {
-            ApplyOutputs(128f, 128f);
+            ApplyOutputs(0f, 0f);
             return;
         }
         // Distance from lane center, ignoring side
@@ -74,10 +76,10 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
         {
             bool outsideDeadzone = absLane >= config.hapticsDeadZonePercentage;
 
-            float f_intensity = outsideDeadzone ? 0f : 128f;
+            float f_intensity = outsideDeadzone ? 128f  : 0f;
 
-            float f_targetLeft = (lane < 0f) ? f_intensity : 128f;
-            float f_targetRight = (lane > 0f) ? f_intensity : 128f;
+            float f_targetLeft = (lane < 0f) ? f_intensity : 0f;
+            float f_targetRight = (lane > 0f) ? f_intensity : 0f;
 
             ApplyOutputs(f_targetLeft, f_targetRight);
             return;
