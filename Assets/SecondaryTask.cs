@@ -41,7 +41,7 @@ public class SecondaryTask : MonoBehaviour
         }
 
         // Input (press stays true until consumed)
-        bool yLeft = OVRInput.GetDown(OVRInput.Button.Four, OVRInput.Controller.LTouch);
+        bool yLeft = OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.LTouch);
 
         if (yLeft)
         {
