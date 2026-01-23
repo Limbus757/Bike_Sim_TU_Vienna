@@ -20,7 +20,7 @@ public class GameController : MonoBehaviour {
 
 
     [Header("Study Logic")]
-    public int totalRoundsToComplete = 3;
+    public int totalRoundsToComplete = 1;
     public DataLogger dataLogger;
     public TextMeshProUGUI endStudyText;
 
@@ -51,7 +51,7 @@ public class GameController : MonoBehaviour {
     }
 
     private float lastTriggerTime = 0f;
-    private float triggerCooldown = 5.0f; // Seconds to wait between triggers
+    private float triggerCooldown = 10.0f; // Seconds to wait between triggers
 
     public void OnBikePassedTrigger()
     {
