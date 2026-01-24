@@ -44,8 +44,13 @@ public class GameController : MonoBehaviour {
     private SplineContainer splineContainer;
     private SplineSpawnpointData spawnpointData;
 
+    private ReceivedSerialProvider receivedSerial;
+    private SentSerialController sentSerial;
+
     void Start() {
         if (endStudyText != null) endStudyText.gameObject.SetActive(false);
+        if (sentSerial == null) sentSerial = FindObjectOfType<SentSerialController>();
+        if (receivedSerial) receivedSerial = FindObjectOfType<ReceivedSerialProvider>();
         InitializeAndCheckSpawnVariables();
         SpawnBike();
     }
@@ -65,7 +70,7 @@ public class GameController : MonoBehaviour {
         lastTriggerTime = Time.time;
 
         if (!studyStarted) {
-            // First hit ever: Initialize study and logger
+            // first hit ever: Initialize study and logger
             studyStarted = true;
             currentLap = 1;
 
@@ -90,10 +95,23 @@ public class GameController : MonoBehaviour {
         if (dataLogger != null) dataLogger.StopLogger();
 
         if (endStudyText != null) {
-            endStudyText.text = "<size=2><color=cyan>Round Completed!</color></size>\n" +
+            endStudyText.text = "<size=2><color=#00FFFF>Round Completed!</color></size>\n" +
                                 "<size=1><color=white>You may now remove the headset.</color></size>";
 
             endStudyText.gameObject.SetActive(true);
+        }
+
+       
+        if (sentSerial != null) {
+            sentSerial.ShutdownSerial();
+        } else {
+            Debug.LogWarning("FinishStudy: SentSerialController not found. Hardware may still be active!");
+        }
+
+        if (receivedSerial != null) {
+            receivedSerial.ShutdownSerial();
+        } else {
+            Debug.LogWarning("FinishStudy: ReceivedSerialProvider not found. Hardware may still be active!");
         }
     }
 

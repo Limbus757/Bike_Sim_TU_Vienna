@@ -145,6 +145,43 @@ public class SentSerialController : MonoBehaviour {
     void OnDestroy() => StopSerialThread();
     void OnApplicationQuit() => StopSerialThread();
 
+    public void ShutdownSerial() {
+        isWriting = false; // Signal thread to stop loop
+
+        if (serialPort != null && serialPort.IsOpen) {
+            lock (_dataLock) {
+                // Reset to safe defaults defined in your config
+                latestData.smEnable = 0;
+                latestData.smDirection = 0;
+                latestData.smPwm = (ushort)(config != null ? config.SteeringPwmMinLimit : 410);
+                latestData.vmLeftPwm = (ushort)(config != null ? config.VibrationPwmIdleValue : 2048);
+                latestData.vmRightPwm = (ushort)(config != null ? config.VibrationPwmIdleValue : 2048);
+            }
+
+            // Prepare and send the final safety packet
+            int structSize = Marshal.SizeOf(typeof(ControlData));
+            int totalPacketSize = structSize + 3;
+            byte[] safetyBuffer = new byte[totalPacketSize];
+            safetyBuffer[0] = 0xAA;
+            safetyBuffer[1] = 0xBB;
+            safetyBuffer[totalPacketSize - 1] = 0xCC;
+
+            IntPtr ptr = Marshal.AllocHGlobal(structSize);
+            try {
+                Marshal.StructureToPtr(latestData, ptr, false);
+                Marshal.Copy(ptr, safetyBuffer, 2, structSize);
+                serialPort.Write(safetyBuffer, 0, totalPacketSize);
+            } finally {
+                Marshal.FreeHGlobal(ptr);
+            }
+
+            serialPort.Close();
+            Debug.Log("[SentSerial] Hardware set to SAFE state and port closed.");
+        }
+
+        if (writeThread != null && writeThread.IsAlive) writeThread.Join(500);
+    }
+
     private void StopSerialThread() {
         isWriting = false;
         if (writeThread != null && writeThread.IsAlive) writeThread.Join(500);

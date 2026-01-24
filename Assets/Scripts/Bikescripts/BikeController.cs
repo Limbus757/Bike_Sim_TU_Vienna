@@ -132,34 +132,23 @@ public class BikeController : MonoBehaviour {
         } else {
             bikeRigidBody.velocity = forward * targetSpeed;
         }
-    } 
+    }
 
     private void MoveBikeAlongTurn() {
-        float wheelbase = 1.5f;
-        TurnRadius = wheelbase / (Mathf.Sin(Mathf.Abs(SteeringAngle) * Mathf.Deg2Rad));
-
-        if (TurnRadius > 85)
-            TurnRadius = Mathf.Infinity;
-
-        Vector3 turningCenterCurve = (transform.position + (transform.right.normalized * TurnRadius));
-        int sign = 0;
-
-        if (SteeringAngle < 0) {
-            Vector3 curDirection = turningCenterCurve - transform.position;
-            turningCenterCurve = transform.position - curDirection;
-            sign = -1;
-        } else if (SteeringAngle > 0) {
-            sign = 1;
-        }
-
         float speedInMS = BikeSpeed / 3.6f;
+        if (speedInMS < 0.1f) return;
 
-        if (SteeringAngle != 0 && TurnRadius != Mathf.Infinity) // curve
-        {
-            transform.RotateAround(turningCenterCurve, Vector3.up, sign * ((speedInMS * 1f) / (2f * Mathf.PI * TurnRadius) * 360f) * Time.deltaTime);
-        } else {
-            transform.position = transform.position + transform.forward * Time.deltaTime * speedInMS;
-        }
+        float wheelbase = 1.5f;
+
+        // 1. Calculate how much the bike SHOULD rotate based on steering
+        // If SteeringAngle is 0, tan is 0, and rotation is 0. No "if" needed!
+        float rotationStep = (speedInMS / wheelbase) * Mathf.Tan(SteeringAngle * Mathf.Deg2Rad) * Time.fixedDeltaTime;
+
+        // 2. Apply the rotation
+        transform.Rotate(Vector3.up, rotationStep * Mathf.Rad2Deg);
+
+        // 3. Move the Rigidbody forward in its NEW direction
+        bikeRigidBody.MovePosition(transform.position + transform.forward * speedInMS * Time.fixedDeltaTime);
     }
 
     // TODO: This function is currently not fully implemented, because the Motion Platform is not working

@@ -166,6 +166,27 @@ public class ReceivedSerialProvider: MonoBehaviour {
         }
     }
 
+    public void ShutdownSerial() {
+        isReading = false; // Signal background thread to stop
+
+        // zero out static globals to prevent other scripts from using stale data
+        lock (_dataLock) {
+            SpeedKmh = 0f;
+            FrontBrakeForce = 0f;
+            RearBrakeForce = 0f;
+            LkaSwitchState = false;
+            ResistanceValue = 0f;
+            latestData = new TelemetryData(); // Clear internal struct
+        }
+
+        if (serialPort != null && serialPort.IsOpen) {
+            serialPort.Close();
+            UnityEngine.Debug.Log("[ReceivedSerial] Input stream closed and globals zeroed.");
+        }
+
+        if (readThread != null && readThread.IsAlive) readThread.Join(500);
+    }
+
     void OnDestroy() {
         // signal thread to stop and wait for it to finish gracefully
         isReading = false;
