@@ -10,6 +10,7 @@ public class DataLogger : MonoBehaviour {
     private MLClosedSplineFrenet frenetController;
     private LKAConfiguration lkaConfig;
     private ML_LaneHapticsFromPercent hapticsController;
+    private SecondaryTask SecondaryTask;
 
     private string filePath;
     private bool isLogging = false;
@@ -18,7 +19,7 @@ public class DataLogger : MonoBehaviour {
     // Ordered: Telemetry -> ALL Normalized/Study Metrics -> Status -> Raw Hardware
     string header = "Time,LapNr,BikeSpeed,SteerAngle," +
                     "CTE_Norm,Haptic_L_Norm,Haptic_R_Norm,LkaPIDError," +
-                    "CTE_Meters,WheelHeadingError_Degrees,IsOnStraight,Curvature,LkaEngaged,LkaSwitchState,MotorDir," +
+                    "CTE_Meters,HeadingError_Degrees,IsOnStraight,Curvature,LkaEngaged,LkaSwitchState,MotorDir,SecondaryTaskNumber,SecondaryTaskButtonPressed," +
                     "MotorPWM,HapticLeftPWM,HapticRightPWM";
 
     void Awake() {
@@ -28,6 +29,7 @@ public class DataLogger : MonoBehaviour {
         gameController = FindObjectOfType<GameController>();
         hapticsController = FindObjectOfType<ML_LaneHapticsFromPercent>();
         lkaConfig = FindObjectOfType<LKAConfiguration>();
+        SecondaryTask = FindAnyObjectByType<SecondaryTask>();
     }
 
     void Start() {
@@ -93,6 +95,8 @@ public class DataLogger : MonoBehaviour {
         line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
         line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(",");
         line.Append(lkaController.SteeringMotorDirection ? "1" : "0").Append(",");
+        line.Append(SecondaryTask.currentNumber).Append(",");
+        line.Append(SecondaryTask.buttonPressed ? "1" : "0").Append(",");
 
         // hardware outputs
         line.Append(lkaController.SteeringMotorPWM).Append(",");

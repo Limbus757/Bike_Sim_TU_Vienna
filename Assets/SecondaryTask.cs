@@ -41,12 +41,7 @@ public class SecondaryTask : MonoBehaviour
         }
 
         // Input (press stays true until consumed)
-        bool yLeft = OVRInput.GetDown(OVRInput.Button.Four, OVRInput.Controller.LTouch);
-
-        if (yLeft)
-        {
-            buttonPressed = true;
-        }
+        buttonPressed = OVRInput.Get(OVRInput.RawButton.X, OVRInput.Controller.LTouch);
     }
 
     private void GenerateNewNumber()

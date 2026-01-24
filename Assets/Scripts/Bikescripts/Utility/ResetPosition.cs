@@ -10,7 +10,7 @@ public class ResetPosition : MonoBehaviour {
 
     public void Update() {
         bool bRight = OVRInput.GetDown(OVRInput.Button.Two, OVRInput.Controller.RTouch);
-        if (Input.GetKeyDown("v") || OVRInput.Get(OVRInput.Button.Two)) {
+        if (Input.GetKeyDown("v") || OVRInput.Get(OVRInput.RawButton.B)) {
             ResetViewPosition();
         }
     }
