@@ -224,15 +224,22 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     public int resolutionSamples = 800;
     public int localSearchWindow = 20;
 
+    [Header("Dynamic Lookahead")]
+    public bool useDynamicLookahead = true;
+    public float minLookahead = 0.5f;
+    public float maxLookahead = 1.5f;
+    public float speedForMaxLookahead = 20f; // km/h
+
     [Header("Curvature Detection")]
     public float straightLineThreshold = 0.015f;
     public bool useSmoothing = true;
     public float stateChangeDelay = 0.15f;
 
     [Header("outputs (read-only)")]
-    public bool isOnStraightTrack; // Restored
+    public bool isOnStraightTrack; 
     public float crossTrackErrorMeters;
-    public float headingErrorDegrees;
+    public float wheelHeadingErrorDegrees; // Log this!
+    public float dynamicHeadingErrorDegrees; // This is what the LKA uses
     public float currentCurvature;
     public Vector3 closestPointOnSpline;
     public Vector3 trackTangentDirection;
@@ -242,14 +249,41 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     private float[] _sampleCurvatures;
     private int _lastClosestSampleIndex = 0;
     private GameController _gameController;
+    private BikeController _bikeController;
 
     // Smoothing logic variables
     private bool _rawIsStraightState;
     private float _stateTransitionTimer;
 
+
+    [Header("VR Debug Visuals")]
+    public bool showVrDebug = true;
+    private LineRenderer _debugLine;
+    private GameObject _wheelSphere;   // The "Truth"
+    private GameObject _probeSphere;   // The "Intent"
+
     void Awake() {
         _gameController = FindObjectOfType<GameController>();
+        _bikeController = FindObjectOfType<BikeController>(); // Direct reference
         BakeSplineData();
+    }
+
+    void Start() {
+        if (showVrDebug) {
+            // 1. Create Line
+            GameObject lineObj = new GameObject("VR_LKA_Line");
+            _debugLine = lineObj.AddComponent<LineRenderer>();
+            _debugLine.material = new Material(Shader.Find("Unlit/Color"));
+            _debugLine.startWidth = 0.03f;
+            _debugLine.endWidth = 0.01f; // Tapers toward the lookahead
+            _debugLine.positionCount = 2;
+
+            // 2. Create Wheel Sphere (White)
+            _wheelSphere = CreateDebugSphere("Wheel_Sphere", Color.white, 0.1f);
+
+            // 3. Create Probe Sphere (Cyan)
+            _probeSphere = CreateDebugSphere("Probe_Sphere", Color.cyan, 0.15f);
+        }
     }
 
     public void BakeSplineData() {
@@ -275,7 +309,17 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     void Update() {
         if (crosstrackProbe == null || headingErrorProbe == null || _samplePoints == null) return;
 
-        // 1. find closest point for the crosstrack probe
+        // --- Dynamic Lookahead Logic ---
+        if (useDynamicLookahead && _bikeController != null) {
+            float speed = _bikeController.BikeSpeed;
+            float t = Mathf.Clamp01(speed / speedForMaxLookahead);
+            float targetZ = Mathf.Lerp(minLookahead, maxLookahead, t);
+
+            // adjust the probe's local position (assuming Z is forward)
+            headingErrorProbe.localPosition = new Vector3(0, 0, targetZ);
+        }
+
+        // find closest point for the crosstrack probe
         int bestIndex = _lastClosestSampleIndex;
         float minSqrDist = float.MaxValue;
         for (int offset = -localSearchWindow; offset <= localSearchWindow; offset++) {
@@ -287,7 +331,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
             }
         }
 
-        // 2. project crosstrack probe onto spline
+        // project crosstrack probe onto spline
         int indexA = _lastClosestSampleIndex;
         int indexB = WrapIndex(_lastClosestSampleIndex + 1, resolutionSamples);
         Vector3 segment = _samplePoints[indexB] - _samplePoints[indexA];
@@ -297,18 +341,44 @@ public class MLClosedSplineFrenet : MonoBehaviour {
         trackTangentDirection = Vector3.Slerp(_sampleTangents[indexA], _sampleTangents[indexB], tSeg).normalized;
         if (_gameController != null && _gameController.reverseDirection) trackTangentDirection *= -1;
 
-        // 3. calculate lateral error
+        // calculate lateral error
         Vector3 flatTangent = Vector3.ProjectOnPlane(trackTangentDirection, Vector3.up).normalized;
         Vector3 flatRight = Vector3.Cross(flatTangent, Vector3.up).normalized;
         crossTrackErrorMeters = Vector3.Dot(crosstrackProbe.position - closestPointOnSpline, -flatRight);
 
-        // 4. heading error calculation (from look-ahead)
-        CalculateHeadingForProbe(headingErrorProbe, out headingErrorDegrees);
+       
+        CalculateHeadingForProbe(crosstrackProbe, out wheelHeadingErrorDegrees);
+        CalculateHeadingForProbe(headingErrorProbe, out dynamicHeadingErrorDegrees);
 
-        // 5. Curvature & Straight State Logic
+        // curvature & Straight State Logic
         currentCurvature = Mathf.Lerp(_sampleCurvatures[indexA], _sampleCurvatures[indexB], tSeg);
         _rawIsStraightState = currentCurvature < straightLineThreshold;
         UpdateStraightStateSmoothing();
+    }
+
+    // Helper to keep code clean
+    private GameObject CreateDebugSphere(string name, Color col, float scale) {
+        GameObject s = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        s.name = name;
+        s.transform.localScale = Vector3.one * scale;
+        Destroy(s.GetComponent<SphereCollider>());
+        s.GetComponent<MeshRenderer>().material = new Material(Shader.Find("Unlit/Color"));
+        s.GetComponent<MeshRenderer>().material.color = col;
+        return s;
+    }
+
+    void LateUpdate() {
+        if (showVrDebug && _debugLine != null) {
+            _debugLine.SetPosition(0, crosstrackProbe.position);
+            _debugLine.SetPosition(1, headingErrorProbe.position);
+
+            _wheelSphere.transform.position = crosstrackProbe.position;
+            _probeSphere.transform.position = headingErrorProbe.position;
+
+            // Optional: Change color based on if lookahead is active
+            _probeSphere.GetComponent<MeshRenderer>().material.color =
+                (Mathf.Abs(crossTrackErrorMeters) > 0.5f) ? Color.red : Color.cyan;
+        }
     }
 
     private void UpdateStraightStateSmoothing() {

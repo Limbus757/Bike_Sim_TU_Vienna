@@ -90,8 +90,9 @@ public class GameController : MonoBehaviour {
         if (dataLogger != null) dataLogger.StopLogger();
 
         if (endStudyText != null) {
-            endStudyText.text = "Round Completed!\n" +
-                "<size=50%>You may now remove the headset.</size>";
+            endStudyText.text = "<size=2><color=cyan>Round Completed!</color></size>\n" +
+                                "<size=1><color=white>You may now remove the headset.</color></size>";
+
             endStudyText.gameObject.SetActive(true);
         }
     }

@@ -16,7 +16,7 @@ public class LKAConfiguration : MonoBehaviour {
     [Tooltip("How much further past the deadzone to ENGAGE.")]
     public float engageBuffer = 0f;
     [Tooltip("How much inside the deadzone to DISENGAGE.")]
-    public float disengageBuffer = 0.5f;
+    public float disengageBuffer = 0f;
 
     public float minSpeedToEngage = 8f;
 
@@ -39,11 +39,11 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Steering PWM Resolution")]
     [Tooltip("Resolution for the ESCON controller. Set to 4095 for 12-bit.")]
-    public int SteeringPWMRange = 255;
+    public int SteeringPWMRange = 4095;
 
     [Header("Vibration PWM Resolution")]
     [Tooltip("Resolution for DRV2605 drivers. Set to 4095 for 12-bit.")]
-    public int VibrationPWMRange = 255;
+    public int VibrationPWMRange = 4095;
 
     public float RoadHalfWidthMeters => trackWidthMeters * 0.5f;
 
@@ -73,7 +73,7 @@ public class LKAConfiguration : MonoBehaviour {
     private void Update() {
         if (frenet == null) return;
 
-        // 1. Calculate Raw Normalization
+        // 1. Calculate Raw Normalization (-1 to 1)
         float currentError = (frenet.crossTrackErrorMeters / RoadHalfWidthMeters);
         crossTrackErrorNormalized = Mathf.Clamp(currentError, -1f, 1f);
 
@@ -90,6 +90,7 @@ public class LKAConfiguration : MonoBehaviour {
 
         // 3. Remapping LKA Output
         if (isWithinActiveZone) {
+            // Pure linear remap: 0 at the deadzone edge, 1 at the lane boundary
             float remapped = (absRaw - lkaDeadZonePercentage) / (1f - lkaDeadZonePercentage);
             lkaCrossTrackErrorNormalized = Mathf.Clamp01(remapped) * Mathf.Sign(crossTrackErrorNormalized);
         } else {

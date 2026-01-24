@@ -18,7 +18,7 @@ public class DataLogger : MonoBehaviour {
     // Ordered: Telemetry -> ALL Normalized/Study Metrics -> Status -> Raw Hardware
     string header = "Time,LapNr,BikeSpeed,SteerAngle," +
                     "CTE_Norm,Haptic_L_Norm,Haptic_R_Norm,LkaPIDError," +
-                    "CTE_Meters,HeadingError_Degrees,IsOnStraight,Curvature,LkaEngaged,LkaSwitchState,MotorDir," +
+                    "CTE_Meters,WheelHeadingError_Degrees,IsOnStraight,Curvature,LkaEngaged,LkaSwitchState,MotorDir," +
                     "MotorPWM,HapticLeftPWM,HapticRightPWM";
 
     void Awake() {
@@ -87,7 +87,7 @@ public class DataLogger : MonoBehaviour {
 
         // enviroment & system status
         line.Append(frenetController != null ? frenetController.crossTrackErrorMeters.ToString("F4") : "0").Append(",");
-        line.Append(frenetController != null ? frenetController.headingErrorDegrees.ToString("F4") : "0").Append(",");
+        line.Append(frenetController != null ? frenetController.wheelHeadingErrorDegrees.ToString("F4") : "0").Append(",");
         line.Append(frenetController != null ? (frenetController.isOnStraightTrack ? "1" : "0") : "0").Append(",");
         line.Append(frenetController != null ? frenetController.currentCurvature.ToString("F6") : "0").Append(",");
         line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
