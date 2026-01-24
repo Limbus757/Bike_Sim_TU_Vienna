@@ -16,7 +16,7 @@ public class LKAConfiguration : MonoBehaviour {
     [Tooltip("How much further past the deadzone to ENGAGE.")]
     public float engageBuffer = 0f;
     [Tooltip("How much inside the deadzone to DISENGAGE.")]
-    public float disengageBuffer = 0f;
+    public float disengageBuffer = 0.10f;
 
     public float minSpeedToEngage = 8f;
 

@@ -20,22 +20,22 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int SteeringMotorPWM = 0;
 
     [Header("PID Gains")]
-    public float Kp = 0.6f;
-    public float Ki = 0.0f;
-    public float Kd = 0.2f;
-    [Range(0.01f, 1f)] public float derivativeSmoothing = 0.01f;
+    public float Kp = 0.8f;
+    public float Ki = 0.0f; // Keep for friction compensation
+    public float Kd = 0.4f;
+    [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f;
 
-    [Header("Advanced Blending (Linear Ramp)")]
+    [Header("Strategy Weights")]
     [Tooltip("Strength of pull at the lane edge.")]
-    [Range(0f, 1f)] public float maxCrosstrackWeight = 0.6f;
-    [Tooltip("Strength of alignment at the center. 1.0 is recommended.")]
-    [Range(0f, 1f)] public float maxHeadingWeight = 0.9f;
+    [Range(0f, 1f)] public float maxCrosstrackWeight = 0.7f;
+    [Tooltip("Strength of alignment at the center handover.")]
+    [Range(0f, 1f)] public float maxHeadingWeight = 1.0f;
 
     [Header("Debug")]
     public float CurrentError;
     private float integralError = 0f;
     private float smoothedDerivative = 0f;
-    private float lastHeadingError = 0f;
+    private float lastWheelHeading = 0f;
     private bool wasActiveLastFrame = false;
 
     void Awake() {
@@ -57,20 +57,26 @@ public class LaneKeepingAssistController : MonoBehaviour {
             return;
         }
 
+        // Always track the 'Wheel Heading' (Frame Angle + Steering Angle)
+        float currentWheelHeading = frenetSource.dynamicHeadingErrorDegrees + bikeController.SteeringAngle;
+
+        // 1. Deadzone Check (0 Correction / Full Rider Freedom)
         if (!config.isWithinActiveZone) {
             SetMotorDisabled();
+            lastWheelHeading = currentWheelHeading;
             UpdateVisuals(Color.yellow, 0.5f, true);
             return;
         }
 
-        // 1. Calculate Error using the Linear Ramp (No Window)
+        // 2. Strategy: Calculate Blended Error (Flare Logic)
+        // lkaCrossTrackErrorNormalized is 0 at deadzone and 1 at lane edge.
         CurrentError = CalculateBlendedError();
 
-        // 2. Run PID with Derivative Smoothing but raw output
-        float steeringEffort = RunPID(CurrentError);
+        // 3. PID: Including Integral and Wheel-Based Damping
+        float steeringEffort = RunPID(CurrentError, currentWheelHeading);
         float effortMagnitude = Mathf.Abs(steeringEffort);
 
-        // 3. Apply Direct Hardware Output (No PWM Slewing or Soft-Start)
+        // 4. Hardware Output
         ApplyHardwareOutput(steeringEffort, effortMagnitude);
 
         UpdateVisuals(Color.green, 1.0f + (effortMagnitude * 4.0f), true);
@@ -78,66 +84,69 @@ public class LaneKeepingAssistController : MonoBehaviour {
     }
 
     private float CalculateBlendedError() {
-        float rawNormCTE = config.lkaCrossTrackErrorNormalized;
-        float absCTE = Mathf.Abs(rawNormCTE);
+        float absCTE = Mathf.Abs(config.lkaCrossTrackErrorNormalized);
+
+        // Pull vs Flare:
+        // Focuses 100% on heading alignment (FLARE) as we reach the deadzone edge.
+        float currentCrosstrackWeight = absCTE * maxCrosstrackWeight;
+        // float currentCrosstrackWeight = Mathf.Sqrt(absCTE) * maxCrosstrackWeight;
+        float currentHeadingWeight = Mathf.Lerp(1.0f, maxHeadingWeight, absCTE);
 
         float currentHeadingError = frenetSource.dynamicHeadingErrorDegrees;
-        float normHeading = Mathf.Clamp(currentHeadingError / 60f, -1f, 1f);
+        float normHeading = Mathf.Clamp(currentHeadingError / 45f, -1f, 1f);
 
-        // Linear Ramp: blendFactor is 0 at center, 1 at lane edge.
-        float blendFactor = Mathf.Clamp01(absCTE);
-
-        // Weights transition smoothly over the whole lane
-        // This gives the 1:54 motor more time to rotate back to zero.
-        float currentCrosstrackWeight = Mathf.Lerp(0f, maxCrosstrackWeight, blendFactor);
-        float currentHeadingWeight = Mathf.Lerp(maxHeadingWeight, 1f - maxCrosstrackWeight, blendFactor);
-
-        float distanceEffort = rawNormCTE * currentCrosstrackWeight;
+        float distanceEffort = config.lkaCrossTrackErrorNormalized * currentCrosstrackWeight;
         float headingEffort = normHeading * currentHeadingWeight;
 
         return distanceEffort + headingEffort;
     }
 
-    private float RunPID(float error) {
+    private float RunPID(float error, float currentWheelHeading) {
+        // Proportional
         float p = Kp * error;
 
+        // Integral: Accumulated only while outside deadzone
+        // Clamped to prevent wind-up which could slam the motor
         integralError = Mathf.Clamp(integralError + (error * Time.fixedDeltaTime), -0.5f, 0.5f);
+        float i = Ki * integralError;
 
-        float currentHeading = frenetSource.dynamicHeadingErrorDegrees;
-        float rawHeadingRate = (currentHeading - lastHeadingError) / Time.fixedDeltaTime;
-        lastHeadingError = currentHeading;
+        // Derivative (Wheel-Based Damping)
+        float wheelRate = (currentWheelHeading - lastWheelHeading) / Time.fixedDeltaTime;
+        lastWheelHeading = currentWheelHeading;
 
-        // Smooth the derivative to prevent motor chatter, but keep it responsive
-        smoothedDerivative = Mathf.Lerp(smoothedDerivative, rawHeadingRate / 100f, derivativeSmoothing);
+        smoothedDerivative = Mathf.Lerp(smoothedDerivative, wheelRate / 100f, derivativeSmoothing);
+        float d = Kd * smoothedDerivative;
 
-        return Mathf.Clamp(p + (Ki * integralError) + (Kd * smoothedDerivative), -1f, 1f);
+        return Mathf.Clamp(p + i + d, -1f, 1f);
     }
 
     private void ApplyHardwareOutput(float effort, float magnitude) {
         isEngaged = true;
         SteeringMotorDirection = effort > 0;
 
-        // Direct mapping to PWM. The 1:54 gears handle the physical smoothing.
         float targetPWM = Mathf.Lerp(config.SteeringPwmMinLimit, config.SteeringPwmMaxLimit, magnitude);
 
-        SteeringMotorPWM = Mathf.RoundToInt(targetPWM);
+        // Slew Rate: Move toward target to protect gears
+        SteeringMotorPWM = Mathf.RoundToInt(Mathf.MoveTowards(SteeringMotorPWM, targetPWM, 5000f * Time.fixedDeltaTime));
     }
 
+    private void SetMotorDisabled() {
+        isEngaged = false;
+        float idleVal = (config != null) ? config.SteeringPwmMinLimit : 410;
+        SteeringMotorPWM = Mathf.RoundToInt(idleVal);
+
+        // Reset PID states so they don't jump when we exit the deadzone again
+        integralError = 0f;
+        smoothedDerivative = 0f;
+        CurrentError = 0f;
+    }
+
+    // ... (CanEngageLKA, HandleHardwareNotReady, Visuals/Setup methods remain same)
     private bool CanEngageLKA() {
         if (!lkaSwitchActive) return false;
         if (bikeController != null && bikeController.BikeSpeed < config.minSpeedToEngage) return false;
         if (frenetSource == null || config == null) return false;
         return true;
-    }
-
-    private void SetMotorDisabled() {
-        isEngaged = false;
-        float idleVal = (config != null) ? config.SteeringPwmMinLimit : 25f;
-        SteeringMotorPWM = Mathf.RoundToInt(idleVal);
-        integralError = 0f;
-        smoothedDerivative = 0f;
-        CurrentError = 0f;
-        if (frenetSource != null) lastHeadingError = frenetSource.dynamicHeadingErrorDegrees;
     }
 
     private void HandleHardwareNotReady() {
