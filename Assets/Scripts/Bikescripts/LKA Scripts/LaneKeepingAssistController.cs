@@ -1,44 +1,39 @@
 using UnityEngine;
 
-/* * handles pid steering logic. 
- * ensures motor is disabled inside the deadzone.
- * red light: switch off or too slow.
- * yellow light: ready but inside deadzone.
- * green light: active steering.
- */
 public class LaneKeepingAssistController : MonoBehaviour {
-    [Header("references")]
+    [Header("References")]
     public MLClosedSplineFrenet frenetSource;
     public LKAConfiguration config;
     public GameObject eternityBike;
     private BikeController bikeController;
 
-    [Header("visuals")]
+    [Header("Visuals")]
     public Renderer bulbRenderer;
     public Light handlebarLight;
     public string bulbName = "LKAIndicator";
     public string lightName = "IndicatorLight";
 
-    [Header("status & output")]
+    [Header("Status & Output")]
     public bool lkaSwitchActive;
-    public bool isEngaged = false; // maps to motor enable pin
+    public bool isEngaged = false;
     public bool SteeringMotorDirection = true;
     public int SteeringMotorPWM = 0;
 
-    [Header("smoothing")]
-    public float SteeringPwmMaxChangePerSec = 5000f;
+    [Header("Slewing/Smoothing")]
+    public float SteeringPwmMaxChangePerSec = 800f;
 
-    [Header("pid gains")]
+    [Header("PID Gains")]
     public float Kp = 0.7f;
     public float Ki = 0.05f;
     public float Kd = 0.3f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.05f;
 
-    [Header("weights")]
+    [Header("Weights & Deadzone Logic")]
     [Range(0f, 1f)] public float weightCrosstrack = 0.95f;
     public float approachSmoothingWindow = 0.3f;
+    public float softStartZone = 0.05f;
 
-    [Header("debug")]
+    [Header("Debug")]
     public float CurrentError;
     private float integralError = 0f;
     private float smoothedDerivative = 0f;
@@ -56,42 +51,27 @@ public class LaneKeepingAssistController : MonoBehaviour {
         if (config != null) currentSmoothPWM = config.SteeringPwmMinLimit;
     }
 
-    private void SetupVisuals() {
-        if (bulbRenderer == null) {
-            GameObject bulbObj = GameObject.Find(bulbName);
-        }
-        if (handlebarLight == null) {
-            GameObject lightObj = GameObject.Find(lightName);
-        }
-    }
-
     void FixedUpdate() => UpdateCorrection();
-
-    public bool IsSpeedValid() {
-        if (bikeController == null || config == null) return false;
-        return bikeController.BikeSpeed >= config.minSpeedToEngage;
-    }
 
     public void UpdateCorrection() {
         lkaSwitchActive = R_BinarySerialTest.LkaSwitchState;
 
-        // 1. hardware/safety check (red light)
-        bool speedValid = IsSpeedValid();
-        if (!lkaSwitchActive || !speedValid) {
+        // 1. Hardware/Safety Check (RED)
+        if (!lkaSwitchActive || (bikeController != null && bikeController.BikeSpeed < config.minSpeedToEngage)) {
             HandleHardwareNotReady();
             return;
         }
 
-        // 2. operational check (yellow light)
+        // 2. Operational Check (YELLOW)
         bool outsideDeadzone = (config != null) && config.isWithinActiveZone;
         if (frenetSource == null || config == null || !outsideDeadzone) {
             SetMotorDisabled();
-            UpdateVisuals(Color.yellow, 0.5f, true); // ready but inactive
+            UpdateVisuals(Color.yellow, 0.5f, true);
             wasActiveLastFrame = true;
             return;
         }
 
-        // 3. active steering (green light)
+        // 3. Active Steering Math (GREEN)
         float normCTE = config.lkaCrossTrackErrorNormalized;
         float currentHeadingError = frenetSource.headingErrorDegrees;
         float normHeading = Mathf.Clamp(currentHeadingError / 90f, -1f, 1f);
@@ -108,12 +88,24 @@ public class LaneKeepingAssistController : MonoBehaviour {
         smoothedDerivative = Mathf.Lerp(smoothedDerivative, rawHeadingRate / 100f, derivativeSmoothing);
 
         float steeringEffort = Mathf.Clamp(p + (Ki * integralError) + (Kd * smoothedDerivative), -1f, 1f);
+        float effortMagnitude = Mathf.Abs(steeringEffort);
 
+        // 4. Dynamic Hardware Mapping
         isEngaged = true;
         SteeringMotorDirection = steeringEffort > 0;
 
-        float effortMagnitude = Mathf.Abs(steeringEffort);
-        float targetPWM = Mathf.Lerp(config.SteeringPwmMinLimit, config.SteeringPwmMaxLimit, effortMagnitude);
+        float minPwm = config.SteeringPwmMinLimit;
+        float maxPwm = config.SteeringPwmMaxLimit;
+        float pwmRange = maxPwm - minPwm;
+
+        // --- THE 20% RANGE CALCULATION ---
+        // Friction floor is the bottom 20% of the range (e.g. if range is 200, floor is 40 above min)
+        float lowestEffectivePWM = minPwm + (pwmRange * 0.20f);
+
+        float softStart = Mathf.Clamp01(Mathf.Abs(normCTE) / softStartZone);
+
+        // Map effortMagnitude (0 to 1) to the range [lowestEffectivePWM to maxPwm]
+        float targetPWM = Mathf.Lerp(lowestEffectivePWM, maxPwm, effortMagnitude * softStart);
 
         currentSmoothPWM = Mathf.MoveTowards(currentSmoothPWM, targetPWM, SteeringPwmMaxChangePerSec * Time.fixedDeltaTime);
         SteeringMotorPWM = Mathf.RoundToInt(currentSmoothPWM);
@@ -124,10 +116,9 @@ public class LaneKeepingAssistController : MonoBehaviour {
 
     private void SetMotorDisabled() {
         isEngaged = false;
-        if (config != null) {
-            SteeringMotorPWM = config.SteeringPwmMinLimit;
-            currentSmoothPWM = config.SteeringPwmMinLimit;
-        }
+        float idleVal = (config != null) ? config.SteeringPwmMinLimit : 25f;
+        SteeringMotorPWM = Mathf.RoundToInt(idleVal);
+        currentSmoothPWM = idleVal;
         integralError = 0f;
         smoothedDerivative = 0f;
         CurrentError = 0f;
@@ -135,7 +126,7 @@ public class LaneKeepingAssistController : MonoBehaviour {
     }
 
     private void HandleHardwareNotReady() {
-        if (wasActiveLastFrame) Debug.LogWarning("lka hardware not ready (switch or speed).");
+        if (wasActiveLastFrame) Debug.LogWarning("LKA Disengaged.");
         UpdateVisuals(Color.red, 1.0f, true);
         SetMotorDisabled();
         wasActiveLastFrame = false;
@@ -149,6 +140,17 @@ public class LaneKeepingAssistController : MonoBehaviour {
         if (handlebarLight != null) {
             handlebarLight.color = col;
             handlebarLight.intensity = active ? (0.5f + intensity) : 0.0f;
+        }
+    }
+
+    private void SetupVisuals() {
+        if (bulbRenderer == null) {
+            GameObject bulbObj = GameObject.Find(bulbName);
+            if (bulbObj != null) bulbRenderer = bulbObj.GetComponent<Renderer>();
+        }
+        if (handlebarLight == null) {
+            GameObject lightObj = GameObject.Find(lightName);
+            if (lightObj != null) handlebarLight = lightObj.GetComponent<Light>();
         }
     }
 }
