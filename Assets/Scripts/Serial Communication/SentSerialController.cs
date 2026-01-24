@@ -87,13 +87,13 @@ public class SentSerialController : MonoBehaviour
     private void PrepareMessageBuffer() {
         if (laneKeepingAssist != null) {
             // Read LKA values
-            SteeringDirPinValue = laneKeepingAssist.motorDirection ? 1 : 0;
+            SteeringDirPinValue = laneKeepingAssist.SteeringMotorDirection ? 1 : 0;
             SteeringENPinValue = laneKeepingAssist.isEngaged ? 1 : 0; // Enable = 1 ONLY when the LKA is actively correcting (PID output is outside dead zone)
-            SteeringPWMPinValue = laneKeepingAssist.motorPWM;
+            SteeringPWMPinValue = laneKeepingAssist.SteeringMotorPWM;
 
             //Placeholder PWM pins for Handlebar vibration Motors
-            VibrationPMWValueLeft = Haptics.pwmLeft255;
-            VibrationPMWValueRight = Haptics.pwmRight255;
+            VibrationPMWValueLeft = Haptics.pwmLeft;
+            VibrationPMWValueRight = Haptics.pwmRight;
         }
 
         // We use 'R' for Request/Control Header

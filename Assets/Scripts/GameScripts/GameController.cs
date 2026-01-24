@@ -22,7 +22,7 @@ public class GameController : MonoBehaviour {
     [Header("Study Logic")]
     public int totalRoundsToComplete = 1;
     public DataLogger dataLogger;
-    public TextMeshProUGUI endStudyText;
+    public TextMeshPro endStudyText;
 
     [Header("Spawn Settings")]
     public bool reverseDirection = false;
@@ -51,37 +51,47 @@ public class GameController : MonoBehaviour {
     }
 
     private float lastTriggerTime = 0f;
-    private float triggerCooldown = 10.0f; // Seconds to wait between triggers
+    private float triggerCooldown = 5.0f; // Seconds to wait between triggers
 
-    public void OnBikePassedTrigger()
-    {
+    public void OnBikePassedTrigger() {
         if (studyFinished) return;
-        if (Time.time - lastTriggerTime < triggerCooldown) return;
+
+        if (studyStarted) {
+            if (Time.time - lastTriggerTime < triggerCooldown) {
+                return; // ignore rapid double-triggers during the lap
+            }
+        }
+
         lastTriggerTime = Time.time;
 
-        if (!studyStarted)
-        {
+        if (!studyStarted) {
+            // First hit ever: Initialize study and logger
             studyStarted = true;
             currentLap = 1;
-            Debug.Log("Study Started - Logger Called");
-            if (dataLogger != null) dataLogger.StartLogger();
-        }
-        else
-        {
+
+            if (dataLogger != null) {
+                dataLogger.StartLogger();
+            }
+
+        } else {
             currentLap++;
-            Debug.Log("Lap " + currentLap + " recorded");
-            if (currentLap > totalRoundsToComplete) FinishStudy();
+            Debug.Log($"<color=white><b>Lap {currentLap}</b> recorded.</color>");
+
+            if (currentLap > totalRoundsToComplete) {
+                FinishStudy();
+            }
         }
     }
 
     private void FinishStudy() {
         studyFinished = true;
-        // Example of how to use the condition in your logic or logging
-        Debug.Log($"Finished study with condition: {currentCondition.ToString()}");
 
+        // stop the logger immediately so the data file is clean
         if (dataLogger != null) dataLogger.StopLogger();
+
         if (endStudyText != null) {
-            endStudyText.text = "Study is Over\nThank you for participating!";
+            endStudyText.text = "Round Completed!\n" +
+                "<size=50%>You may now remove the headset.</size>";
             endStudyText.gameObject.SetActive(true);
         }
     }
@@ -100,6 +110,9 @@ public class GameController : MonoBehaviour {
 
         bikeRigidbody.position = startPos;
         bikeRigidbody.rotation = startRot;
+
+        bikeRigidbody.WakeUp();
+        Physics.SyncTransforms();
 
         if (triggerCube != null) {
             // trigger is always placed in front of the bike's current facing direction
