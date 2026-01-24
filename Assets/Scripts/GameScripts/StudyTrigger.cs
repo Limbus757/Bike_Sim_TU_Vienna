@@ -8,8 +8,10 @@ public class StudyTrigger : MonoBehaviour {
     }
 
     private void OnTriggerEnter(Collider other) {
-        // Triggers when the bike (tagged "Player") passes through
-        if (other.CompareTag("Player") || other.transform.root.CompareTag("Player")) {
+        // Look for the BikeController anywhere in the object that hit us
+        var bike = other.GetComponentInParent<BikeController>();
+
+        if (bike != null) {
             if (gameController != null) {
                 gameController.OnBikePassedTrigger();
             }

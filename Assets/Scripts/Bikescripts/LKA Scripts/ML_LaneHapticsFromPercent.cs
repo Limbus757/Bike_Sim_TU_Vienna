@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using static LKAConfiguration;
 
+
+/*
 /// <summary>
 /// Generates left/right handlebar haptic intensities based on normalized lane position.
 /// Vibrations ramp up as the rider approaches a lane edge, matching the side of the lane being approached..
@@ -122,3 +124,92 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
     }
 }
 
+*/
+
+public class ML_LaneHapticsFromPercent : MonoBehaviour {
+
+    [Header("Input")]
+    public LKAConfiguration config;
+
+    [Header("Response Curve (Adaptive Only)")]
+    public AnimationCurve intensityCurve = AnimationCurve.EaseInOut(0, 0, 1, 1);
+
+    [Header("Scaling")]
+    [Range(0f, 2f)] public float gain = 1f;
+
+    [Header("Smoothing")]
+    [Range(0f, 30f)] public float smoothing = 10f;
+
+    [Header("Normalized Strength (0.0 to 1.0)")]
+    [Range(0f, 1f)] public float normalizedLeftVibration;
+    [Range(0f, 1f)] public float normalizedRightVibration;
+
+    [Header("Hardware PWM")]
+    public int pwmLeft;
+    public int pwmRight;
+
+
+    private int idlePWM;
+    private float _leftVel;
+    private float _rightVel;
+
+    private void Awake() {
+        if (config == null) config = GetComponent<LKAConfiguration>();
+        idlePWM = (config != null) ? config.VibrationPwmIdleValue : 128;
+        pwmLeft = pwmRight = idlePWM;
+    }
+
+    private void Update() {
+        UpdateHaptics();
+    }
+
+    private void UpdateHaptics() {
+        // setup hardware baseline
+        float targetL = 0f;
+        float targetR = 0f;
+
+        // calculate Intensity based on Mode
+        if (config != null && config.mode != HapticsMode.OFF) {
+            float normalizedCTE = config.crossTrackErrorNormalized;
+            float absNormCTE = Mathf.Abs(normalizedCTE);
+            float intensity = 0f;
+
+            switch (config.mode) {
+                case HapticsMode.FIXED:
+                    intensity = (absNormCTE >= config.hapticsDeadZonePercentage) ? 1.0f : 0f;
+                    break;
+                case HapticsMode.ADAPTIVE:
+                    float t = Mathf.InverseLerp(config.hapticsDeadZonePercentage, config.hapticsMaxVibPercentage, absNormCTE);
+                    intensity = Mathf.Clamp01(intensityCurve.Evaluate(t) * gain);
+                    break;
+            }
+
+            // assign side
+            if (normalizedCTE < 0f) targetL = intensity;
+            else if (normalizedCTE > 0f) targetR = intensity;
+        }
+
+        bool useSmooth = (config != null && config.mode == HapticsMode.ADAPTIVE && smoothing > 0f);
+
+        ProcessChannel(targetL, ref normalizedLeftVibration, ref _leftVel, out pwmLeft, idlePWM, useSmooth);
+        ProcessChannel(targetR, ref normalizedRightVibration, ref _rightVel, out pwmRight, idlePWM, useSmooth);
+    }
+
+    /// <summary>
+    /// Unified pipeline for a single haptic channel.
+    /// </summary>
+    private void ProcessChannel(float target, ref float currentVal, ref float velocity, out int pwmOut, int idle, bool smooth) {
+        if (target <= 0 && currentVal <= 0.001f) {
+            currentVal = 0f;
+            velocity = 0f;
+        } else if (smooth) {
+            float smoothTime = 1f / smoothing;
+            currentVal = Mathf.SmoothDamp(currentVal, target, ref velocity, smoothTime);
+        } else {
+            currentVal = target;
+            velocity = 0f;
+        }
+        currentVal = Mathf.Clamp01(currentVal);
+        pwmOut = idle - Mathf.RoundToInt(currentVal * idle);
+    }
+}

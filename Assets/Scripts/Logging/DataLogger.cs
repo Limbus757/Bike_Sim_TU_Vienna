@@ -30,28 +30,38 @@ public class DataLogger : MonoBehaviour {
         lkaConfig = FindObjectOfType<LKAConfiguration>();
     }
 
-    public void StartLogger() {
-        if (isLogging) return;
+    void Start() {
+        // prepare the directory
+        string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+        string studyName = (gameController != null) ? gameController.studyName : "DefaultStudy";
+        string folderPath = Path.Combine(documentsPath, "StudyData", studyName);
 
-        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
-        string pId = gameController != null ? gameController.studyParticipantId.ToString() : "0";
-        string cond = gameController != null ? gameController.currentCondition.ToString() : "Unknown";
-        float trackWidth = lkaConfig != null ? lkaConfig.trackWidthMeters : 0f;
+        if (!Directory.Exists(folderPath)) {
+            Directory.CreateDirectory(folderPath);
+        }
 
-        filePath = Path.Combine(Application.persistentDataPath, $"Study_{pId}_{cond}_{timestamp}.csv");
+        // define the filename
+        string pId = (gameController != null) ? gameController.studyParticipantId.ToString() : "0";
+        string cond = (gameController != null) ? gameController.currentCondition.ToString() : "Test";
+        string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+        filePath = Path.Combine(folderPath, $"{pId}_{cond}_{timestamp}.csv");
 
-        //Metadata - Includes all constants so they don't repeat in data rows
-        string metadata = $"Participant:{pId},Condition:{cond},TrackWidth:{trackWidth}m,Date:{timestamp}";
-
+        // create the file physically on the PC
         try {
             sw = new StreamWriter(filePath, false);
-            sw.WriteLine(metadata); // Row 1: Constants
-            sw.WriteLine(header);   // Row 2: Labels
-            isLogging = true;
-            Debug.Log($"<color=green>Logging Started: {filePath}</color>");
+            sw.AutoFlush = true; // Ensures every write hits the disk immediately
+            sw.WriteLine($"# Study: {studyName} | Participant: {pId} | Condition: {cond} | InitTime: {timestamp}");
+            sw.WriteLine(header);
+            Debug.Log($"<color=cyan><b>Logger:</b> File created and waiting for trigger at {filePath}</color>");
         } catch (Exception e) {
-            Debug.LogError("Logger failed to start: " + e.Message);
+            Debug.LogError("Logger failed to create file in Start: " + e.Message);
         }
+    }
+
+    public void StartLogger() {
+        if (isLogging) return;
+        isLogging = true;
+        Debug.Log("<color=green><b>Logging Started</b></color>");
     }
 
     void FixedUpdate() {
@@ -69,11 +79,10 @@ public class DataLogger : MonoBehaviour {
         line.Append(bikeController.BikeSpeed.ToString("F2")).Append(",");
         line.Append(bikeController.SteeringAngle.ToString("F2")).Append(",");
 
-        //
         // normalized data grouped together for easy plotting/correlation
         line.Append(lkaConfig != null ? lkaConfig.crossTrackErrorNormalized.ToString("F4") : "0").Append(",");
-        line.Append(hapticsController != null ? hapticsController.pwmLeft.ToString("F4") : "0").Append(",");
-        line.Append(hapticsController != null ? hapticsController.pwmRight.ToString("F4") : "0").Append(",");
+        line.Append(hapticsController != null ? hapticsController.normalizedLeftVibration.ToString("F4") : "0").Append(",");
+        line.Append(hapticsController != null ? hapticsController.normalizedRightVibration.ToString("F4") : "0").Append(",");
         line.Append(lkaController != null ? lkaController.CurrentError.ToString("F4") : "0").Append(",");
 
         // enviroment & system status
@@ -83,12 +92,12 @@ public class DataLogger : MonoBehaviour {
         line.Append(frenetController != null ? frenetController.currentCurvature.ToString("F6") : "0").Append(",");
         line.Append(lkaController.isEngaged ? "1" : "0").Append(",");
         line.Append(lkaController.lkaSwitchActive ? "1" : "0").Append(",");
-        line.Append(lkaController.motorDirection ? "1" : "0").Append(",");
+        line.Append(lkaController.SteeringMotorDirection ? "1" : "0").Append(",");
 
         // hardware outputs
-        line.Append(lkaController.motorPWM).Append(",");
-        line.Append(hapticsController != null ? hapticsController.pwmLeft255 : 0).Append(",");
-        line.Append(hapticsController != null ? hapticsController.pwmRight255 : 0);
+        line.Append(lkaController.SteeringMotorPWM).Append(",");
+        line.Append(hapticsController != null ? hapticsController.pwmLeft : 0).Append(",");
+        line.Append(hapticsController != null ? hapticsController.pwmRight : 0);
 
         sw.WriteLine(line.ToString());
     }
