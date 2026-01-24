@@ -1,174 +1,152 @@
 using UnityEngine;
 using System.IO.Ports;
 using System.Threading;
-using System.Globalization;
+using System.Runtime.InteropServices;
 using System;
 
-/// <summary>
-/// Handles one-way serial communication (Write Only) to an external device.
-/// It collects motor control values from the LaneKeepingAssist script and sends them 
-/// on a separate thread at a fixed configurable interval.
-/// </summary>
-public class SentSerialController : MonoBehaviour
-{
+public class SentSerialController : MonoBehaviour {
 
-    // --- Data Source ---
-    [Header("0. Data Source")]
-    [Tooltip("The LaneKeepingAssist script that determines the motor control values.")]
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    public struct ControlData {
+        public byte smEnable;       // SM_ENABLE_PIN
+        public byte smDirection;    // SM_DIRECTION_PIN
+        public ushort smPwm;        // SM_PWM_PIN
+        public ushort vmLeftPwm;    // VM_PWM_L_PIN 
+        public ushort vmRightPwm;   // VM_PWM_R_PIN
+    }
+
+    [Header("Data Sources")]
+    public LKAConfiguration config; // Added Configuration Source
     public LaneKeepingAssistController laneKeepingAssist;
-    [Tooltip("The Haptic script that determines the motor control values.")]
-    public ML_LaneHapticsFromPercent Haptics;
+    public ML_LaneHapticsFromPercent haptics;
 
-    // --- Configuration & Debug Fields ---
-    [Header("1. Settings")]
-    [Tooltip("The name of the serial port (e.g., COM3 on Windows).")]
+    [Header("Settings")]
     public string portName = "COM3";
+    public int baudRate = 256000;
+    public int sendIntervalMs = 5;
+    private float uiUpdateRate = 0.5f;
 
-    [Tooltip("The communication speed in bits per second, must match microcontroller.")]
-    public int baudRate = 115200;
+    [Header("Live Debug")]
+    public bool LKA_Engaged_Debug;
+    public int MotorDirection_Debug;
+    public int SteeringPWM_Debug;
+    public int VibLeftPWM_Debug;
+    public int VibRightPWM_Debug;
 
-    [Tooltip("The interval in milliseconds for sending data. 20ms = 50Hz.")]
-    public int sendIntervalMs = 20;
-
-    [Header("2. Live Debug Data")]
-    [Tooltip("The last full line sent to the serial port.")]
-    public string lastSentString = "No message sent yet.";
-
-    [Tooltip("Actual period (in ms) of the sending thread.")]
-    public uint actualSendPeriodMs = 0;
-
-    // --- Control Outputs ---
-    [Header("3. Steering Control Outputs")]
-    [Tooltip("Value for the Direction Pin (0=Left, 1=Right).")]
-    public int SteeringDirPinValue = 0;
-
-    [Tooltip("Value for the Enable Pin (0=OFF, 1=ON/Active Correction).")]
-    public int SteeringENPinValue = 0;
-
-    [Tooltip("PWM Value for the main speed control (MIN_PWM-MAX_PWM).")]
-    public int SteeringPWMPinValue = 0;
-
-    [Header("3. Vibration Control Outputs")]
-    [Tooltip("PWM Value for a secondary control (0-255).")]
-    public int VibrationPMWValueLeft = 0;
-
-    [Tooltip("PWM Value for a third control (0-255).")]
-    public int VibrationPMWValueRight = 0;
-
-    // --- Private Fields ---
     private SerialPort serialPort;
     private Thread writeThread;
     private bool isWriting = false;
-    private object _writeLock = new object();
-    private string _latestMessageToSend = "";
+    private ControlData latestData;
+    private readonly object _dataLock = new object();
+    private float nextUiUpdateTime = 0f;
 
-    private string _safeStateMessage = "0,0,0,128,128\n";
+    void Awake() {
+        // Automatically try to find config if not set in inspector
+        if (config == null) config = FindObjectOfType<LKAConfiguration>();
+        if (laneKeepingAssist == null) laneKeepingAssist = FindObjectOfType<LaneKeepingAssistController>();
+        if (haptics == null) haptics = FindObjectOfType<ML_LaneHapticsFromPercent>();
 
-    private const int DEFAULT_PWM_UNUSED = 0;
+        if (config != null) {
+            // Initialize with values defined in your LKAConfiguration
+            latestData = new ControlData {
+                smEnable = 0,
+                smDirection = 0,
+                smPwm = (ushort)config.SteeringPwmMinLimit,   // Start at safety floor
+                vmLeftPwm = (ushort)config.VibrationPwmIdleValue,
+                vmRightPwm = (ushort)config.VibrationPwmIdleValue
+            };
+        } else {
+            Debug.LogError("[Serial Test] LKAConfiguration not found! Using hardcoded safety defaults.");
+            latestData = new ControlData { smPwm = 410, vmLeftPwm = 2048, vmRightPwm = 2048 };
+        }
 
-    void Awake()
-    {
-        Thread.CurrentThread.CurrentCulture = CultureInfo.InvariantCulture;
         StartSerialThread();
     }
 
-    void Update()
-    {
-        PrepareMessageBuffer();
-        lock (_writeLock)
-        {
-            lastSentString = _latestMessageToSend;
+    void Update() {
+        PrepareBinaryBuffer();
+        UpdateDebugMirrors();
+    }
+
+    private void PrepareBinaryBuffer() {
+        if (laneKeepingAssist != null && haptics != null) {
+            lock (_dataLock) {
+                latestData.smEnable = (byte)(laneKeepingAssist.isEngaged ? 1 : 0);
+                latestData.smDirection = (byte)(laneKeepingAssist.SteeringMotorDirection ? 1 : 0);
+                latestData.smPwm = (ushort)laneKeepingAssist.SteeringMotorPWM;
+                latestData.vmLeftPwm = (ushort)haptics.pwmLeft;
+                latestData.vmRightPwm = (ushort)haptics.pwmRight;
+            }
         }
     }
 
-    /// <summary>
-    /// Collects data from LaneKeepingAssist, updates local fields, and formats the serial command.
-    /// </summary>
-    private void PrepareMessageBuffer() {
-        if (laneKeepingAssist != null) {
-            // Read LKA values
-            SteeringDirPinValue = laneKeepingAssist.SteeringMotorDirection ? 1 : 0;
-            SteeringENPinValue = laneKeepingAssist.isEngaged ? 1 : 0; // Enable = 1 ONLY when the LKA is actively correcting (PID output is outside dead zone)
-            SteeringPWMPinValue = laneKeepingAssist.SteeringMotorPWM;
+    private void UpdateDebugMirrors() {
+        if (Time.time >= nextUiUpdateTime) {
+            // No lock used here as per your preference; slight risk of torn read 
+            // is acceptable for visual debugging.
+            LKA_Engaged_Debug = latestData.smEnable == 1;
+            MotorDirection_Debug = latestData.smDirection;
+            SteeringPWM_Debug = latestData.smPwm;
+            VibLeftPWM_Debug = latestData.vmLeftPwm;
+            VibRightPWM_Debug = latestData.vmRightPwm;
 
-            //Placeholder PWM pins for Handlebar vibration Motors
-            VibrationPMWValueLeft = Haptics.pwmLeft;
-            VibrationPMWValueRight = Haptics.pwmRight;
-        }
-
-        // We use 'R' for Request/Control Header
-        string message = string.Format(
-            CultureInfo.InvariantCulture,
-            "{0},{1},{2},{3},{4}\n", // New Format: 5 comma-separated values
-            SteeringENPinValue,
-            SteeringDirPinValue,
-            SteeringPWMPinValue,
-            VibrationPMWValueLeft,
-            VibrationPMWValueRight
-            );
-
-        lock (_writeLock)
-        {
-            _latestMessageToSend = message;
+            nextUiUpdateTime = Time.time + uiUpdateRate;
         }
     }
 
-    /// <summary>
-    /// Initializes and starts the background thread for serial communication.
-    /// </summary>
     private void StartSerialThread() {
         isWriting = true;
-        writeThread = new Thread(WriteData);
+        writeThread = new Thread(WriteDataLoop);
         writeThread.Start();
     }
 
-    /// <summary>
-    /// The main loop for the writing thread.
-    /// </summary>
-    private void WriteData() {
+    private void WriteDataLoop() {
+        int structSize = Marshal.SizeOf(typeof(ControlData));
+        int totalPacketSize = structSize + 3;
+        byte[] packetBuffer = new byte[totalPacketSize];
+
+        packetBuffer[0] = 0xAA;
+        packetBuffer[1] = 0xBB;
+        packetBuffer[totalPacketSize - 1] = 0xCC;
+
         try {
             serialPort = new SerialPort(portName, baudRate);
             serialPort.Open();
 
-            while (isWriting) {
-                if (serialPort.IsOpen) {
-                    string message;
-                    lock (_writeLock) { message = _latestMessageToSend; }
-                    serialPort.Write(message);
+            while (isWriting && serialPort.IsOpen) {
+                ControlData dataToSend;
+                lock (_dataLock) { dataToSend = latestData; }
+
+                IntPtr ptr = Marshal.AllocHGlobal(structSize);
+                try {
+                    Marshal.StructureToPtr(dataToSend, ptr, false);
+                    Marshal.Copy(ptr, packetBuffer, 2, structSize);
+                } finally {
+                    Marshal.FreeHGlobal(ptr);
                 }
+
+                serialPort.Write(packetBuffer, 0, totalPacketSize);
                 Thread.Sleep(sendIntervalMs);
             }
-
-            // application quit / thread stopping
-            if (serialPort.IsOpen) {
-                Debug.Log("[Serial TX] Sending Safety Shutdown Packet...");
-                serialPort.Write(_safeStateMessage);
-                serialPort.BaseStream.Flush();  // ensure data is pushed out before closing
-            }
-
         } catch (Exception e) {
             Debug.LogError($"[Serial TX Error]: {e.Message}");
         } finally {
             if (serialPort != null && serialPort.IsOpen) {
+                // Safety: On close, reset to idle values from config if possible
+                byte[] safePacket = new byte[totalPacketSize];
+                Array.Clear(safePacket, 0, safePacket.Length);
+                // You could manually set the idle bytes in safePacket here if needed
+                serialPort.Write(safePacket, 0, totalPacketSize);
                 serialPort.Close();
-                Debug.Log("[Serial TX] Port closed safely.");
             }
         }
     }
 
-    // Cleanup Methods
-    void OnDestroy() { StopSerialThread(); }
-
-    void OnApplicationQuit() { StopSerialThread(); }
+    void OnDestroy() => StopSerialThread();
+    void OnApplicationQuit() => StopSerialThread();
 
     private void StopSerialThread() {
-        if (!isWriting) return;
         isWriting = false;
-
-        // wait for the thread to finish its final safety write and close the port
-        if (writeThread != null && writeThread.IsAlive) {
-            // Increase timeout slightly to ensure the final write completes
-            writeThread.Join(500);
-        }
+        if (writeThread != null && writeThread.IsAlive) writeThread.Join(500);
     }
 }

@@ -10,7 +10,7 @@
 #include "pwm.h" // Standard R4 Renesas Core PWM library
 
 // --- CONFIGURATION ---
-#define SERIAL_BAUDRATE 115200
+#define SERIAL_BAUDRATE 256000
 #define TIMEOUT_THRESHOLD_MS 75 
 
 // --- PIN DEFINITIONS ---
@@ -118,23 +118,30 @@ void setup() {
 }
 
 void loop() {
-    // Packet sync: Header (0xAA 0xBB) + Payload (8 bytes) + Footer (0xCC) = 11 total
-    if (Serial.available() >= (sizeof(ControlData) + 3)) { 
+    while (Serial.available() >= 11) {
+        // 2. Look for the start of the packet (0xAA 0xBB)
         if (Serial.read() == 0xAA) {
-            if (Serial.read() == 0xBB) {
-                // Read directly into struct memory
-                Serial.readBytes((byte*)&currentData, sizeof(ControlData)); 
-                
+            if (Serial.peek() == 0xBB) { // Peek to confirm second header byte
+                Serial.read(); // Consume the 0xBB
+
+                // 3. Fast-read the payload directly into the struct memory
+                byte* p = (byte*)&currentData;
+                for (size_t i = 0; i < sizeof(ControlData); i++) {
+                    p[i] = Serial.read();
+                }
+
+
                 if (Serial.read() == 0xCC) {
                     firstData = true;
                     lastDataTime = millis();
+                    
                     applySignals();
                 }
             }
         }
     }
 
-    // Safety Watchdog
+    // --- Safety Watchdog ---
     if (firstData && (millis() - lastDataTime > TIMEOUT_THRESHOLD_MS)) {
         setSafeState(); 
     }
