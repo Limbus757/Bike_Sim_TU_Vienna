@@ -1,41 +1,50 @@
 using UnityEngine;
 
-/* * This script centralizes all Steering (SM) and Vibration (VM) configurations.
- * It handles bit-resolution mapping, lane geometry, and safety logic.
- */
-
+/// <summary>
+/// Central configuration for Lane Keeping Assist (LKA) and Haptic Feedback. 
+/// Manages track geometry, hardware PWM resolution limits, and signal normalization.
+/// Handles the hysteresis logic for motor engagement and remaps raw errors into PID input values.
+/// </summary>
 public class LKAConfiguration : MonoBehaviour {
     [Header("Frenet Source")]
     public MLClosedSplineFrenet frenet;
 
     [Header("Lane Geometry")]
-    public float trackWidthMeters = 4.0f;
-    
-    [Header("LKA Settings")]
-    [Range(0f, 1f)] public float lkaDeadZonePercentage = 0.4f;
-    [Tooltip("How much further past the deadzone to ENGAGE.")]
-    public float engageBuffer = 0f;
-    [Tooltip("How much inside the deadzone to DISENGAGE.")]
-    public float disengageBuffer = 0.10f;
+    public float trackWidthMeters = 4.0f; // Total width from left to right curb
 
-    public float minSpeedToEngage = 8f;
+    [Header("LKA Settings")]
+    [Range(0f, 1f)]
+    public float lkaDeadZonePercentage = 0.4f; // Inner area where LKA stays idle (eg. 0.4 = 40% of half-width)
+
+    [Tooltip("The minimum speed for the lanekeeping to activate.")]
+    public float minSpeedToEngage = 8f; // speed threshold for safety
+
+    [Tooltip("How much further past the deadzone to ENGAGE.")]
+    public float engageBuffer = 0f; // extra distance required to trigger LKA
+
+    [Tooltip("How much inside the deadzone to DISENGAGE.")]
+    public float disengageBuffer = 0.10f; // prevents LKA from flickering on/off at the boundary
 
     public enum HapticsMode { OFF, FIXED, ADAPTIVE }
 
     [Header("Haptics Settings")]
     public HapticsMode mode = HapticsMode.ADAPTIVE;
-    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.2f;
-    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.4f;
+    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.2f; // Haptics usually trigger before steering
+    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.4f;   // Max vibration intensity reach
 
     [Header("Calculated Hardware PWM Limits")]
-    public int SteeringPwmMinLimit;
-    public int SteeringPwmMaxLimit;
-    public int VibrationPwmIdleValue;
+    public int SteeringPwmMinLimit;     // Calculated 10% safety floor
+    public int SteeringPwmMaxLimit;     // Calculated 90% safety ceiling
+    public int VibrationPwmIdleValue;   // Midpoint of PWM range (50%)
 
     [Header("Live Status")]
-    public bool isWithinActiveZone = false;
-    [Range(-1f, 1f)] public float crossTrackErrorNormalized;
-    [Range(-1f, 1f)] public float lkaCrossTrackErrorNormalized;
+    public bool isWithinActiveZone = false; // Is the LKA currently providing torque?
+
+    [Range(-1f, 1f)]
+    public float crossTrackErrorNormalized; // Raw position: -1 (Left edge) to 1 (Right edge)
+
+    [Range(-1f, 1f)]
+    public float lkaCrossTrackErrorNormalized; // Remapped error for the Lanekeeping, used specifically for PID input
 
     [Header("Steering PWM Resolution")]
     [Tooltip("Resolution for the ESCON controller. Set to 4095 for 12-bit.")]
@@ -45,11 +54,12 @@ public class LKAConfiguration : MonoBehaviour {
     [Tooltip("Resolution for DRV2605 drivers. Set to 4095 for 12-bit.")]
     public int VibrationPWMRange = 4095;
 
+    // Helper to get distance from center to one curb
     public float RoadHalfWidthMeters => trackWidthMeters * 0.5f;
 
-
-    private const float SteeringSafetyFloorPercent = 0.10f; // 10%
-    private const float SteeringSafetyCeilingPercent = 0.90f; // 90%
+    // Safety margins to prevent overdriving the physical motors
+    private const float steeringMinPwmPercent = 0.10f;
+    private const float steeringMaxPwmPercent = 0.90f;
 
     private void Awake() {
         if (frenet == null) frenet = FindObjectOfType<MLClosedSplineFrenet>();
@@ -60,20 +70,18 @@ public class LKAConfiguration : MonoBehaviour {
         UpdateBitRanges();
     }
 
-    // Recalculates all hardware integer bounds based on specific SM/VM bit depths
+    // Converts percentage safety limits into raw integer bits for the hardware controllers
     private void UpdateBitRanges() {
-        // Steering Motor (SM) PWM calculations
-        SteeringPwmMinLimit = Mathf.RoundToInt(SteeringPWMRange * SteeringSafetyFloorPercent);
-        SteeringPwmMaxLimit = Mathf.RoundToInt(SteeringPWMRange * SteeringSafetyCeilingPercent);
-
-        // Vibration Motor (VM) PWM calculations
+        SteeringPwmMinLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMinPwmPercent);
+        SteeringPwmMaxLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMaxPwmPercent);
         VibrationPwmIdleValue = Mathf.RoundToInt(VibrationPWMRange * 0.50f);
     }
 
     private void Update() {
         if (frenet == null) return;
 
-        // 1. Calculate Raw Normalization (-1 to 1)
+        // Calculate Raw Normalization
+        // Maps meters to a -1 to 1 scale based on track width
         float currentError = (frenet.crossTrackErrorMeters / RoadHalfWidthMeters);
         crossTrackErrorNormalized = Mathf.Clamp(currentError, -1f, 1f);
 
@@ -81,16 +89,17 @@ public class LKAConfiguration : MonoBehaviour {
         float engageLine = lkaDeadZonePercentage + engageBuffer;
         float disengageLine = lkaDeadZonePercentage - disengageBuffer;
 
-        // 2. LKA State Logic (Hysteresis)
+        // LKA State Logic (Hysteresis)
+        // This logic ensures that if the rider "wobbles" on the line, the motor doesn't chatter
         if (!isWithinActiveZone && absRaw > engageLine) {
-            isWithinActiveZone = true;
+            isWithinActiveZone = true; // Turn ON
         } else if (isWithinActiveZone && absRaw < disengageLine) {
-            isWithinActiveZone = false;
+            isWithinActiveZone = false; // Turn OFF
         }
 
-        // 3. Remapping LKA Output
+        // Remapping LKA Output
+        // Re-scales the error so that the edge of the deadzone is 0 and the curb is 1
         if (isWithinActiveZone) {
-            // Pure linear remap: 0 at the deadzone edge, 1 at the lane boundary
             float remapped = (absRaw - lkaDeadZonePercentage) / (1f - lkaDeadZonePercentage);
             lkaCrossTrackErrorNormalized = Mathf.Clamp01(remapped) * Mathf.Sign(crossTrackErrorNormalized);
         } else {
