@@ -184,7 +184,7 @@ public class ReceivedSerialProvider: MonoBehaviour {
             UnityEngine.Debug.Log("[ReceivedSerial] Input stream closed and globals zeroed.");
         }
 
-        if (readThread != null && readThread.IsAlive) readThread.Join(500);
+        if (readThread != null && readThread.IsAlive) readThread.Join(50);
     }
 
     void OnDestroy() {
