@@ -82,9 +82,14 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
                     intensity = (absNormCTE >= config.hapticsDeadZonePercentage) ? 1.0f : 0f;
                     break;
                 case LKAConfiguration.HapticsMode.ADAPTIVE:
-                    // graduated vibration response based on distance from center
-                    float t = Mathf.InverseLerp(config.hapticsDeadZonePercentage, config.hapticsMaxVibPercentage, absNormCTE);
-                    intensity = Mathf.Clamp01(intensityCurve.Evaluate(t) * gain);
+                    // If we are inside the deadzone, force intensity to 0
+                    if (absNormCTE < config.hapticsDeadZonePercentage) {
+                        intensity = 0f;
+                    } else {
+                        // Only calculate the ramp if we are OUTSIDE the deadzone
+                        float t = Mathf.InverseLerp(config.hapticsDeadZonePercentage, config.hapticsMaxVibPercentage, absNormCTE);
+                        intensity = Mathf.Clamp01(intensityCurve.Evaluate(t) * gain);
+                    }
                     break;
             }
 
