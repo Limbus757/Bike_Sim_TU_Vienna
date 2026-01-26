@@ -57,8 +57,8 @@ bool configVMDriver(int enPin) {
 }
 
 void setFrequencies() {
-    // 20kHz = 50 microseconds period
-    uint32_t period_us = 50; 
+    
+    uint32_t period_us = 1000; 
 
     PwmOut smPwm(SM_PWM_PIN);
     smPwm.begin(period_us, 0, false, TIMER_SOURCE_DIV_1); 
