@@ -14,7 +14,7 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("LKA Settings")]
     [Range(0f, 1f)]
-    public float lkaDeadZonePercentage = 0.4f; // Inner area where LKA stays idle (eg. 0.4 = 40% of half-width)
+    public float lkaDeadZonePercentage = 0.35f; // Inner area where LKA stays idle (eg. 0.4 = 40% of half-width)
 
     [Tooltip("The minimum speed for the lanekeeping to activate.")]
     public float minSpeedToEngage = 8f; // speed threshold for safety
@@ -29,8 +29,8 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Haptics Settings")]
     public HapticsMode mode = HapticsMode.ADAPTIVE;
-    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.2f; // Haptics usually trigger before steering
-    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.4f;   // Max vibration intensity reach
+    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.15f; // Haptics usually trigger before steering
+    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.35f;   // Max vibration intensity reach
 
     [Header("Calculated Hardware PWM Limits")]
     public int SteeringPwmMinLimit;     // Calculated 10% safety floor
@@ -77,7 +77,7 @@ public class LKAConfiguration : MonoBehaviour {
         VibrationPwmIdleValue = Mathf.RoundToInt(VibrationPWMRange * 0.50f);
     }
 
-    private void Update() {
+    private void FixedUpdate() {
         if (frenet == null) return;
 
         // Calculate Raw Normalization

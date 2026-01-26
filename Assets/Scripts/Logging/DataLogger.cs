@@ -9,6 +9,7 @@ using UnityEngine;
 /// Data Logger for research studies.
 /// Uses a background thread to prevent disk I/O from causing frame drops.
 /// Automatically generates CSV headers from the internal LogData struct.
+/// Uses semicolon delimiter for Excel compatibility with European locales.
 /// </summary>
 public class DataLogger : MonoBehaviour {
     [Header("Source Controllers")]
@@ -20,17 +21,26 @@ public class DataLogger : MonoBehaviour {
     public ML_LaneHapticsFromPercent haptics;
     public SecondaryTask secondaryTask;
 
+    private const string DELIMITER = ";";
+
+    [Header("CSV Format Settings")]
+    [Tooltip("Culture for number formatting (e.g., 'en-US', 'de-DE', 'fr-FR')")]
+    public string cultureName = "de-DE";  // <-- Set this to "de-DE" for Germany
+
+    private IFormatProvider _formatProvider;
+
     /// <summary>
     /// Defines the CSV columns and their order.
     /// </summary>
     private struct LogData {
         public float Timestamp;
         public float Trackposition;
-        public float Speed_MS;
+        public float Speed_Kmh;
         public float SteerAngle;
         public float CTE_Norm;
         public float Haptic_L_Norm;
         public float Haptic_R_Norm;
+        public float LkaNormEffort;
         public float LkaPIDError;
         public float CTE_Meters;
         public float B_HeadingError_Deg;
@@ -52,18 +62,19 @@ public class DataLogger : MonoBehaviour {
     {
     "Timestamp",
     "Trackposition",
-    "Speed_MS",
+    "Speed_KmH",
     "SteerAngle",
     "CTE_Norm",
     "Haptic_L_Norm",
     "Haptic_R_Norm",
     "LkaPIDError",
+    "LkaNormEffort",
     "CTE_Meters",
     "B_HeadingError_Deg",
     "W_HeadingError_Deg",
     "IsOnStraight",
-    "CurrentTrackCurvature",
-    "CurrentTrackRadius",
+    "TrackCurvature_1/Meters",
+    "TrackRadius_Meters",
     "LKA_Engaged",
     "LKA_Switch",
     "MotorDir",
@@ -86,6 +97,8 @@ public class DataLogger : MonoBehaviour {
         haptics = FindObjectOfType<ML_LaneHapticsFromPercent>();
         lkaConfig = FindObjectOfType<LKAConfiguration>();
         secondaryTask = FindAnyObjectByType<SecondaryTask>();
+
+        UpdateFormatProvider();
     }
 
     void Start() {
@@ -97,6 +110,16 @@ public class DataLogger : MonoBehaviour {
         }
 
         PrepareDirectoryAndFile();
+    }
+
+    public void UpdateFormatProvider() {
+        try {
+            _formatProvider = new CultureInfo(cultureName);
+            Debug.Log($"<color=cyan><b>Logger:</b> Using culture: {cultureName}</color>");
+        } catch (CultureNotFoundException) {
+            Debug.LogWarning($"Culture '{cultureName}' not found. Using InvariantCulture.");
+            _formatProvider = CultureInfo.InvariantCulture;
+        }
     }
 
     /// <summary>
@@ -129,7 +152,7 @@ public class DataLogger : MonoBehaviour {
 
             sw = new StreamWriter(filePath, false) { AutoFlush = false };
             sw.WriteLine($"# Study: {studyName} | Participant: {pId} | Condition: {cond} | Init: {timestamp}");
-            sw.WriteLine(string.Join(",", CsvHeaders));
+            sw.WriteLine(string.Join(DELIMITER, CsvHeaders));
 
             Debug.Log($"<color=cyan><b>Logger:</b> File created at {filePath}</color>");
         } catch (Exception e) {
@@ -146,7 +169,6 @@ public class DataLogger : MonoBehaviour {
 
     void FixedUpdate() {
         if (isLogging) {
-            Debug.Log($"Haptic L PWM: {haptics.pwmLeft}, R PWM: {haptics.pwmRight}, L Norm: {haptics.normalizedLeftVibration}");
             LogCurrentData();
         }
     }
@@ -157,27 +179,28 @@ public class DataLogger : MonoBehaviour {
         LogData d = CaptureFrameData();
 
         string line =
-            d.Timestamp.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.Trackposition.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.Speed_MS.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.SteerAngle.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.CTE_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.Haptic_L_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.Haptic_R_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.LkaPIDError.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.CTE_Meters.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.B_HeadingError_Deg.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.W_HeadingError_Deg.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.IsOnStraight + "," +
-            d.CurrentTrackCurvature.ToString("F6", CultureInfo.InvariantCulture) + "," +
-            d.CurrentTrackRadius.ToString("F4", CultureInfo.InvariantCulture) + "," +
-            d.LKA_Engaged + "," +
-            d.LKA_Switch + "," +
-            d.MotorDir + "," +
-            d.SecTaskNum + "," +
-            d.SecTaskPressed + "," +
-            d.MotorPWM + "," +
-            d.HapticLeftPWM + "," +
+            d.Timestamp.ToString("F4", _formatProvider) + DELIMITER +  // <-- Changed
+            d.Trackposition.ToString("F4", _formatProvider) + DELIMITER +
+            d.Speed_Kmh.ToString("F2", _formatProvider) + DELIMITER +
+            d.SteerAngle.ToString("F4", _formatProvider) + DELIMITER +
+            d.CTE_Norm.ToString("F4", _formatProvider) + DELIMITER +
+            d.Haptic_L_Norm.ToString("F4", _formatProvider) + DELIMITER +
+            d.Haptic_R_Norm.ToString("F4", _formatProvider) + DELIMITER +
+            d.LkaNormEffort.ToString("F4", _formatProvider) + DELIMITER +
+            d.LkaPIDError.ToString("F4", _formatProvider) + DELIMITER +
+            d.CTE_Meters.ToString("F4", _formatProvider) + DELIMITER +
+            d.B_HeadingError_Deg.ToString("F2", _formatProvider) + DELIMITER +
+            d.W_HeadingError_Deg.ToString("F2", _formatProvider) + DELIMITER +
+            d.IsOnStraight + DELIMITER +
+            d.CurrentTrackCurvature.ToString("F4", _formatProvider) + DELIMITER +  // <-- Changed
+            d.CurrentTrackRadius.ToString("F2", _formatProvider) + DELIMITER +    // <-- Changed
+            d.LKA_Engaged + DELIMITER +
+            d.LKA_Switch + DELIMITER +
+            d.MotorDir + DELIMITER +
+            d.SecTaskNum + DELIMITER +
+            d.SecTaskPressed + DELIMITER +
+            d.MotorPWM + DELIMITER +
+            d.HapticLeftPWM + DELIMITER +
             d.HapticRightPWM;
 
         _logQueue.Enqueue(line);
@@ -191,12 +214,13 @@ public class DataLogger : MonoBehaviour {
         return new LogData {
             Timestamp = Time.time,
             Trackposition = frenet.currentArcLengthS,
-            Speed_MS = bike.BikeSpeedMS,
+            Speed_Kmh = bike.BikeSpeedKmh,
             SteerAngle = bike.SteeringAngle,
             CTE_Norm = lkaConfig.crossTrackErrorNormalized,
             Haptic_L_Norm = haptics.normalizedLeftVibration,
             Haptic_R_Norm = haptics.normalizedRightVibration,
             LkaPIDError = lka.CurrentError,
+            LkaNormEffort = lka.CurrentEffort,
             CTE_Meters = frenet.crossTrackErrorMeters,
             B_HeadingError_Deg = frenet.bikeHeadingErrorDegrees,
             W_HeadingError_Deg = frenet.wheelHeadingErrorDegrees,

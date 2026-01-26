@@ -33,8 +33,11 @@ public class LaneKeepingAssistController : MonoBehaviour {
     [Range(0f, 2f)] public float maxCrosstrackWeight = 0.6f;
     [Range(0f, 2f)] public float maxHeadingWeight = 1.2f;
 
+    private float maxExpectedError = 1.8f;
+
     [Header("Debug")]
     public float CurrentError;
+    public float CurrentEffort;
     private float integralError = 0f;
     private float smoothedDerivative = 0f;
     private float lastSteerAngle = 0f;
@@ -67,16 +70,17 @@ public class LaneKeepingAssistController : MonoBehaviour {
 
         CurrentError = CalculateBlendedError();
 
+
         // 1. Run PID
-        float steeringEffort = RunPID(CurrentError, bikeController.SteeringAngle);
+        CurrentEffort = RunPID(CurrentError, bikeController.SteeringAngle);
 
         // 2. Apply Inversion Toggle
-        if (invertMotorDirection) steeringEffort *= -1f;
+        if (invertMotorDirection) CurrentEffort *= -1f;
 
-        float effortMagnitude = Mathf.Abs(steeringEffort);
+        float effortMagnitude = Mathf.Abs(CurrentEffort);
 
         // 3. Hardware Output
-        ApplyHardwareOutput(steeringEffort, effortMagnitude);
+        ApplyHardwareOutput(CurrentEffort, effortMagnitude);
 
         UpdateVisuals(Color.green, 1.0f + (effortMagnitude * 4.0f), true);
         wasActiveLastFrame = true;
