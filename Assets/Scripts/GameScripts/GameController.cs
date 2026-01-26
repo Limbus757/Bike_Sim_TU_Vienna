@@ -57,7 +57,6 @@ public class GameController : MonoBehaviour {
     private SplineContainer splineContainer;
     private SplineSpawnpointData spawnpointData;
 
-    private ReceivedSerialProvider receivedSerial;
     private SentSerialController sentSerial;
 
     private float lastTriggerTime = 0f;
@@ -72,7 +71,6 @@ public class GameController : MonoBehaviour {
 
         // find hardware communication scripts
         if (sentSerial == null) sentSerial = FindObjectOfType<SentSerialController>();
-        if (receivedSerial == null) receivedSerial = FindObjectOfType<ReceivedSerialProvider>();
 
         InitializeAndCheckSpawnVariables();
         SpawnBike();
@@ -134,14 +132,6 @@ public class GameController : MonoBehaviour {
         } else {
             Debug.LogWarning("FinishStudy: SentSerialController not found. Hardware may still be active!");
         }
-
-        if (receivedSerial != null) {
-            receivedSerial.ShutdownSerial();
-
-        } else {
-            Debug.LogWarning("FinishStudy: ReceivedSerialProvider not found. Hardware may still be active!");
-        }
-        
     }
 
     /// <summary>
