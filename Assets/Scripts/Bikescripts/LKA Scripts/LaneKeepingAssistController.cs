@@ -24,14 +24,14 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int SteeringMotorPWM = 0;
 
     [Header("PID Gains")]
-    public float Kp = 0.6f;
-    public float Ki = 0.0f;
-    public float Kd = 0.1f;
+    public float Kp = 0.8f;
+    public float Ki = 0.005f;
+    public float Kd = 0.2f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f;
 
     [Header("Strategy Weights")]
     [Range(0f, 2f)] public float maxCrosstrackWeight = 0.6f;
-    [Range(0f, 2f)] public float maxHeadingWeight = 1f;
+    [Range(0f, 2f)] public float maxHeadingWeight = 1.2f;
 
     [Header("Debug")]
     public float CurrentError;
@@ -123,7 +123,7 @@ public class LaneKeepingAssistController : MonoBehaviour {
         SteeringMotorDirection = effort > 0;
 
         float targetPWM = Mathf.Lerp(config.SteeringPwmMinLimit, config.SteeringPwmMaxLimit, magnitude);
-        SteeringMotorPWM = Mathf.RoundToInt(Mathf.MoveTowards(SteeringMotorPWM, targetPWM, 5000f * Time.fixedDeltaTime));
+        SteeringMotorPWM = Mathf.RoundToInt(Mathf.MoveTowards(SteeringMotorPWM, targetPWM, 8000f * Time.fixedDeltaTime));
     }
 
     private void SetMotorDisabled() {

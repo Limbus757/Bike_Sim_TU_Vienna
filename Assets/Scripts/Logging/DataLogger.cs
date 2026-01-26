@@ -145,7 +145,10 @@ public class DataLogger : MonoBehaviour {
     }
 
     void FixedUpdate() {
-        if (isLogging) LogCurrentData();
+        if (isLogging) {
+            Debug.Log($"Haptic L PWM: {haptics.pwmLeft}, R PWM: {haptics.pwmRight}, L Norm: {haptics.normalizedLeftVibration}");
+            LogCurrentData();
+        }
     }
 
     private void LogCurrentData() {
@@ -187,7 +190,7 @@ public class DataLogger : MonoBehaviour {
     private LogData CaptureFrameData() {
         return new LogData {
             Timestamp = Time.time,
-            Trackposition = frenet.currentArcLength;
+            Trackposition = frenet.currentArcLengthS,
             Speed_MS = bike.BikeSpeedMS,
             SteerAngle = bike.SteeringAngle,
             CTE_Norm = lkaConfig.crossTrackErrorNormalized,

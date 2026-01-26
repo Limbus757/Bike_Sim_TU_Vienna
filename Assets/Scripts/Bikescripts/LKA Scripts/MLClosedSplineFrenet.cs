@@ -26,6 +26,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     public float minBikeSpeedHeading = 0.0f;
 
     [Header("Outputs (read-only)")]
+    public float currentArcLengthS;
     public bool isOnStraightTrack;
     public float crossTrackErrorMeters;
     public float bikeHeadingErrorDegrees;
@@ -39,6 +40,8 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     private Vector3[] _sampleTangents;
     private float[] _sampleCurvatures;
     private int _lastClosestSampleIndex = 0;
+    private float[] _cumulativeLengths;  // Cumulative distance from start to each sample
+    private float _totalSplineLength;
 
     private GameController _gameController;
     private BikeController _bikeController;
@@ -81,6 +84,11 @@ public class MLClosedSplineFrenet : MonoBehaviour {
         _samplePoints = new Vector3[resolutionSamples + 1];
         _sampleTangents = new Vector3[resolutionSamples + 1];
         _sampleCurvatures = new float[resolutionSamples + 1];
+        _cumulativeLengths = new float[resolutionSamples + 1];  // Initialize
+
+        _cumulativeLengths[0] = 0f;  // Start at zero distance
+
+        Vector3 prevPoint = worldTransform.TransformPoint((Vector3)spline.EvaluatePosition(0));
 
         for (int i = 0; i <= resolutionSamples; i++) {
             float t = (float)i / resolutionSamples;
@@ -89,7 +97,15 @@ public class MLClosedSplineFrenet : MonoBehaviour {
 
             float rawCurve = spline.EvaluateCurvature(t);
             _sampleCurvatures[i] = (float.IsNaN(rawCurve) || float.IsInfinity(rawCurve)) ? 0f : Mathf.Abs(rawCurve) / worldScale;
+
+            // Calculate cumulative length (skip for i=0)
+            if (i > 0) {
+                float segmentLength = Vector3.Distance(_samplePoints[i], _samplePoints[i - 1]);
+                _cumulativeLengths[i] = _cumulativeLengths[i - 1] + segmentLength;
+            }
         }
+
+        _totalSplineLength = _cumulativeLengths[resolutionSamples];
     }
 
     void FixedUpdate() {
@@ -116,6 +132,20 @@ public class MLClosedSplineFrenet : MonoBehaviour {
         int indexB = WrapIndex(_lastClosestSampleIndex + 1, resolutionSamples);
         Vector3 segment = _samplePoints[indexB] - _samplePoints[indexA];
         float tSeg = Mathf.Clamp01(Vector3.Dot(crosstrackProbe.position - _samplePoints[indexA], segment) / Mathf.Max(segment.sqrMagnitude, 0.0001f));
+
+        // NEW: Calculate current arc length (s parameter)
+        // Get cumulative distances at sample points
+        float lengthA = _cumulativeLengths[indexA];
+        float lengthB = _cumulativeLengths[indexB];
+
+        // If we're wrapping around the end of the spline (e.g., from sample 799 to 0)
+        if (indexB < indexA) {
+            // Wrap around case: we're at the end of the spline
+            lengthB = _cumulativeLengths[indexB] + _totalSplineLength;
+        }
+
+        // Linearly interpolate the arc length
+        currentArcLengthS = Mathf.Lerp(lengthA, lengthB, tSeg);
 
         closestPointOnSpline = _samplePoints[indexA] + tSeg * segment;
         trackTangentDirection = Vector3.Slerp(_sampleTangents[indexA], _sampleTangents[indexB], tSeg).normalized;

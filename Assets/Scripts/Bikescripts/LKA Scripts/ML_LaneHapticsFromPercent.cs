@@ -59,7 +59,7 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
     /// <summary>
     /// Updates the haptic feedback state every frame.
     /// </summary>
-    private void Update() {
+    private void FixedUpdate() {
         UpdateHaptics();
     }
 
@@ -112,22 +112,21 @@ public class ML_LaneHapticsFromPercent : MonoBehaviour {
     /// </summary>
     private void ProcessChannel(float target, ref float currentVal, ref float velocity, out int pwmOut, int idle, bool smooth) {
 
-        // zero-crossing force: if the target is zero, we cut vibration immediately.
-        // this prevents the smoothing algorithm from lagging while the rider is on the opposite side.
-        if (target <= 0) {
+        // If we're switching from vibration to no vibration, cut immediately
+        if (currentVal > 0 && target <= 0) {
             currentVal = 0f;
             velocity = 0f;
-        } else if (smooth) {
-            // apply temporal smoothing for a natural feel
-            float smoothTime = 1f / smoothing;
-            currentVal = Mathf.SmoothDamp(currentVal, target, ref velocity, smoothTime);
-        } else {
-            // immediate response for non-smoothed modes
-            currentVal = target;
-            velocity = 0f;
+        } else if (target > 0) {
+            if (smooth) {
+                float smoothTime = 1f / smoothing;
+                currentVal = Mathf.SmoothDamp(currentVal, target, ref velocity, smoothTime);
+            } else {
+                currentVal = target;
+                velocity = 0f;
+            }
         }
+        // If target is 0 and currentVal is already 0, do nothing
 
-        // map the normalized intensity to the inverted hardware pwm range
         currentVal = Mathf.Clamp01(currentVal);
         pwmOut = idle - Mathf.RoundToInt(currentVal * idle);
     }
