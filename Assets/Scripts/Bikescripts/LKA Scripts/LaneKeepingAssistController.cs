@@ -24,14 +24,14 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int SteeringMotorPWM = 0;
 
     [Header("PID Gains")]
-    public float Kp = 0.8f;
+    public float Kp = 0.6f;
     public float Ki = 0.0f;
-    public float Kd = 0.4f;
+    public float Kd = 0.1f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f;
 
     [Header("Strategy Weights")]
-    [Range(0f, 1f)] public float maxCrosstrackWeight = 0.7f;
-    [Range(0f, 1f)] public float maxHeadingWeight = 1.0f;
+    [Range(0f, 2f)] public float maxCrosstrackWeight = 0.6f;
+    [Range(0f, 2f)] public float maxHeadingWeight = 1f;
 
     [Header("Debug")]
     public float CurrentError;
@@ -83,20 +83,21 @@ public class LaneKeepingAssistController : MonoBehaviour {
     }
 
     private float CalculateBlendedError() {
-        float absCTE = Mathf.Abs(config.lkaCrossTrackErrorNormalized);
-
-        // Position Error: Left is -1.0
+        // distance from center (-1 to 1)
         float distanceError = config.lkaCrossTrackErrorNormalized;
+        float absCTE = Mathf.Abs(distanceError);
 
-        // Heading Error: Left is -Deg
-        float headError = frenetSource.wheelHeadingErrorDegrees;
+        // wheel alignment error (degrees) from the handlebar probe
+        float wheelError = frenetSource.wheelHeadingErrorDegrees;
 
-        float currentCrosstrackWeight = absCTE * maxCrosstrackWeight;
-        float currentHeadingWeight = Mathf.Lerp(1.0f, maxHeadingWeight, absCTE);
+        // normalize: 45 degrees of wheel offset = 1.0 error
+        float normWheelHeading = Mathf.Clamp(wheelError / 90f, -1f, 1f);
 
-        float normHeading = Mathf.Clamp(headError / 45f, -1f, 1f);
+        // dynamic Weighting, closer to the center, we care less about distance and more about the wheel being straight.
+        float currentCrosstrackWeight = Mathf.Pow(absCTE, 1.1f) * maxCrosstrackWeight;
+        float currentHeadingWeight = maxHeadingWeight; // Keep this high (e.g., 1.5 - 2.0)
 
-        return (distanceError * currentCrosstrackWeight) + (normHeading * currentHeadingWeight);
+        return (distanceError * currentCrosstrackWeight) + (normWheelHeading * currentHeadingWeight);
     }
 
     private float RunPID(float error, float currentSteerAngle) {
@@ -131,6 +132,7 @@ public class LaneKeepingAssistController : MonoBehaviour {
         integralError = 0f;
         smoothedDerivative = 0f;
         CurrentError = 0f;
+        if (bikeController != null) lastSteerAngle = bikeController.SteeringAngle;
     }
 
     private bool CanEngageLKA() {

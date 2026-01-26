@@ -19,16 +19,11 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     public int resolutionSamples = 800;
     public int localSearchWindow = 20;
 
-    [Header("Dynamic Lookahead")]
-    public bool useDynamicLookahead = true;
-    public float minLookahead = 0.5f;
-    public float maxLookahead = 1.5f;
-    public float speedForMaxLookahead = 20f; // km/h
-
     [Header("Curvature Detection")]
     public float straightLineThreshold = 0.015f;
     public bool useSmoothing = true;
     public float stateChangeDelay = 0.15f;
+    public float minBikeSpeedHeading = 0.0f;
 
     [Header("Outputs (read-only)")]
     public bool isOnStraightTrack;
@@ -44,6 +39,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     private Vector3[] _sampleTangents;
     private float[] _sampleCurvatures;
     private int _lastClosestSampleIndex = 0;
+
     private GameController _gameController;
     private BikeController _bikeController;
 
@@ -145,7 +141,7 @@ public class MLClosedSplineFrenet : MonoBehaviour {
     private void CalculateHeadingForProbe(Transform probe, out float error) {
         // FIX 2: VELOCITY GATING
         // If the bike is barely moving, don't calculate an error. This stops the start-line jitters.
-        if (_bikeController != null && _bikeController.BikeSpeedKmh < 0.2f) {
+        if (_bikeController != null && _bikeController.BikeSpeedKmh < minBikeSpeedHeading) {
             error = 0f;
             return;
         }
@@ -169,10 +165,10 @@ public class MLClosedSplineFrenet : MonoBehaviour {
         Vector3 probeTangent = Vector3.Slerp(_sampleTangents[bestIdx], _sampleTangents[nextIdx], t).normalized;
         if (_gameController != null && _gameController.reverseDirection) probeTangent *= -1;
 
+        // uses Vector3.up to squash the 3D tilt of the handlebars into a 2D floor map
         Vector3 probeForwardPlanar = Vector3.ProjectOnPlane(probe.forward, Vector3.up).normalized;
         Vector3 trackForwardPlanar = Vector3.ProjectOnPlane(probeTangent, Vector3.up).normalized;
 
-        // FIX 3: THE WRAPPER
         // Vector3.SignedAngle handles the -180 to 180 wrap automatically.
         error = -Vector3.SignedAngle(probeForwardPlanar, trackForwardPlanar, Vector3.up);
     }

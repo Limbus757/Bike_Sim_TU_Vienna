@@ -2,8 +2,7 @@ using System;
 using System.IO;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
-using System.Reflection;
-using System.Linq;
+using System.Globalization;
 using UnityEngine;
 
 /// <summary>
@@ -13,20 +12,20 @@ using UnityEngine;
 /// </summary>
 public class DataLogger : MonoBehaviour {
     [Header("Source Controllers")]
-    private BikeController bike;
-    private LaneKeepingAssistController lka;
-    private GameController game;
-    private MLClosedSplineFrenet frenet;
-    private LKAConfiguration lkaConfig;
-    private ML_LaneHapticsFromPercent haptics;
-    private SecondaryTask secondaryTask;
+    public BikeController bike;
+    public LaneKeepingAssistController lka;
+    public GameController game;
+    public MLClosedSplineFrenet frenet;
+    public LKAConfiguration lkaConfig;
+    public ML_LaneHapticsFromPercent haptics;
+    public SecondaryTask secondaryTask;
 
     /// <summary>
     /// Defines the CSV columns and their order.
     /// </summary>
     private struct LogData {
         public float Timestamp;
-        public int Lap;
+        public float Trackposition;
         public float Speed_MS;
         public float SteerAngle;
         public float CTE_Norm;
@@ -49,9 +48,34 @@ public class DataLogger : MonoBehaviour {
         public int HapticRightPWM;
     }
 
+    private static readonly string[] CsvHeaders =
+    {
+    "Timestamp",
+    "Trackposition",
+    "Speed_MS",
+    "SteerAngle",
+    "CTE_Norm",
+    "Haptic_L_Norm",
+    "Haptic_R_Norm",
+    "LkaPIDError",
+    "CTE_Meters",
+    "B_HeadingError_Deg",
+    "W_HeadingError_Deg",
+    "IsOnStraight",
+    "CurrentTrackCurvature",
+    "CurrentTrackRadius",
+    "LKA_Engaged",
+    "LKA_Switch",
+    "MotorDir",
+    "SecTaskNum",
+    "SecTaskPressed",
+    "MotorPWM",
+    "HapticLeftPWM",
+    "HapticRightPWM"
+    };
+
     private bool isLogging = false;
     private StreamWriter sw;
-    private FieldInfo[] _fields;
     private ConcurrentQueue<string> _logQueue = new ConcurrentQueue<string>();
 
     void Awake() {
@@ -62,8 +86,6 @@ public class DataLogger : MonoBehaviour {
         haptics = FindObjectOfType<ML_LaneHapticsFromPercent>();
         lkaConfig = FindObjectOfType<LKAConfiguration>();
         secondaryTask = FindAnyObjectByType<SecondaryTask>();
-
-        _fields = typeof(LogData).GetFields(BindingFlags.Public | BindingFlags.Instance);
     }
 
     void Start() {
@@ -96,7 +118,7 @@ public class DataLogger : MonoBehaviour {
         try {
             string documentsPath = Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
             string studyName = game.studyName;
-            string folderPath = Path.Combine(documentsPath, "StudyData", studyName);
+            string folderPath = Path.Combine(documentsPath, "StudyData_BikeSim", studyName);
 
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
@@ -107,7 +129,7 @@ public class DataLogger : MonoBehaviour {
 
             sw = new StreamWriter(filePath, false) { AutoFlush = false };
             sw.WriteLine($"# Study: {studyName} | Participant: {pId} | Condition: {cond} | Init: {timestamp}");
-            sw.WriteLine(string.Join(",", _fields.Select(f => f.Name)));
+            sw.WriteLine(string.Join(",", CsvHeaders));
 
             Debug.Log($"<color=cyan><b>Logger:</b> File created at {filePath}</color>");
         } catch (Exception e) {
@@ -129,12 +151,31 @@ public class DataLogger : MonoBehaviour {
     private void LogCurrentData() {
         if (sw == null) return;
 
-        LogData data = CaptureFrameData();
+        LogData d = CaptureFrameData();
 
-        string line = string.Join(",", _fields.Select(f => {
-            object val = f.GetValue(data);
-            return (val is float fVal) ? fVal.ToString("F4") : (val?.ToString() ?? "0");
-        }));
+        string line =
+            d.Timestamp.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.Trackposition.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.Speed_MS.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.SteerAngle.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.CTE_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.Haptic_L_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.Haptic_R_Norm.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.LkaPIDError.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.CTE_Meters.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.B_HeadingError_Deg.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.W_HeadingError_Deg.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.IsOnStraight + "," +
+            d.CurrentTrackCurvature.ToString("F6", CultureInfo.InvariantCulture) + "," +
+            d.CurrentTrackRadius.ToString("F4", CultureInfo.InvariantCulture) + "," +
+            d.LKA_Engaged + "," +
+            d.LKA_Switch + "," +
+            d.MotorDir + "," +
+            d.SecTaskNum + "," +
+            d.SecTaskPressed + "," +
+            d.MotorPWM + "," +
+            d.HapticLeftPWM + "," +
+            d.HapticRightPWM;
 
         _logQueue.Enqueue(line);
     }
@@ -146,7 +187,7 @@ public class DataLogger : MonoBehaviour {
     private LogData CaptureFrameData() {
         return new LogData {
             Timestamp = Time.time,
-            Lap = game.currentLap,
+            Trackposition = frenet.currentArcLength;
             Speed_MS = bike.BikeSpeedMS,
             SteerAngle = bike.SteeringAngle,
             CTE_Norm = lkaConfig.crossTrackErrorNormalized,
@@ -201,7 +242,6 @@ public class DataLogger : MonoBehaviour {
     }
 
     private void OnApplicationQuit() {
-        isLogging = false;
-        FinalizeFile();
+        StopLogger();
     }
 }

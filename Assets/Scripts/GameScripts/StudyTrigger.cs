@@ -1,20 +1,29 @@
 using UnityEngine;
 
 /// <summary>
-/// Detects when a bike enters a specific area and notifies the GameController.
-/// Used for lap timing and ending a study session.
+/// Detects when a bike enters specific study milestones (Start or Finish) 
+/// and notifies the GameController to update the study state.
 /// </summary>
 public class StudyTrigger : MonoBehaviour {
+
+    /// <summary>
+    /// Categorizes the trigger's purpose within the track layout.
+    /// </summary>
+    public enum TriggerType { StartLine, FinishLine }
+
+    [Header("Trigger Configuration")]
+    [Tooltip("Designate whether this object acts as the starting point or the lap/finish point.")]
+    public TriggerType type;
 
     [Header("References")]
     [Tooltip("The main game controller that handles the logic for when a trigger is hit.")]
     private GameController gameController;
 
     /// <summary>
-    /// finds the GameController in the scene at the start of the session.
+    /// Finds the GameController in the scene at the start of the session.
     /// </summary>
     void Start() {
-        gameController = FindObjectOfType<GameController>(); // locate the game controller to send events to it later
+        gameController = FindObjectOfType<GameController>();
 
         if (gameController == null) {
             Debug.LogWarning($"StudyTrigger on {gameObject.name}: No GameController found in scene!");
@@ -22,22 +31,22 @@ public class StudyTrigger : MonoBehaviour {
     }
 
     /// <summary>
-    /// triggered when another collider enters this object's trigger zone.
+    /// Triggered when another collider enters this object's trigger zone.
+    /// Identifies if the object is a bike and notifies the controller of the specific milestone reached.
     /// </summary>
-    /// <param name="other">the collider that entered the trigger.</param>
+    /// <param name="other">The collider that entered the trigger zone.</param>
     private void OnTriggerEnter(Collider other) {
-        // look for the BikeController anywhere in the object that hit us (or its parents)
-        // this ensures that hitting the wheel, frame, or handlebar still triggers the event
+        // Look for the BikeController anywhere in the object that hit us (or its parents)
         var bike = other.GetComponentInParent<BikeController>();
 
-        // if the object that entered is indeed a bike, notify the controller
+        // If the object that entered is indeed a bike, notify the controller of the specific event
         if (bike != null) {
             if (gameController != null) {
-                // fire the event to record the pass
-                gameController.OnBikePassedTrigger();
+                // Fire the event to record the pass based on this trigger's specific type
+                gameController.OnTriggerHit(type);
 
-                // optional debug to confirm the trigger worked in the console
-                Debug.Log($"StudyTrigger: Bike {bike.name} detected.");
+                // Optional debug to confirm which type of trigger was activated
+                Debug.Log($"StudyTrigger: Bike {bike.name} detected at {type}.");
             }
         }
     }

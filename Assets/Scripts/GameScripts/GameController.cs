@@ -9,12 +9,15 @@ using TMPro;
 public class GameController : MonoBehaviour {
 
     public enum StudyConditions {
-        BaselineCW,
-        BaselineCC,
-        HapticsFixedCW,
-        HapticsFixedCC,
-        HapticsAdaptiveCW,
-        HapticsAdaptiveCC,
+        // CW = 0 (Forward)
+        BaselineCW = 0,
+        HapticsFixedCW = 0,
+        HapticsAdaptiveCW = 0,
+
+        // CC = 1 (Reverse)
+        BaselineCC = 1,
+        HapticsFixedCC = 1,
+        HapticsAdaptiveCC = 1
     }
 
     [Header("Study Parameters")]
@@ -25,154 +28,166 @@ public class GameController : MonoBehaviour {
     [Tooltip("The condition currently being tested.")]
     public StudyConditions currentCondition = StudyConditions.BaselineCW;
 
-    [Header("Study Logic")]
-    [Tooltip("How many laps the participant must complete before the study auto-ends.")]
-    public int totalRoundsToComplete = 1;
+    [Header("Logging and end procedure")]
     public DataLogger dataLogger;
     public TextMeshPro endStudyText;
 
     [Header("Spawn Settings")]
-    [Tooltip("If true, flips the bike 180 degrees at the start line.")]
+    [Tooltip("If true, flips the bike 180 degrees at the start line, including start and finish line spawns ")]
     public bool reverseDirection = false;
 
-    [Header("Auto-Trigger Settings")]
-    [Tooltip("The collider object that acts as the start/finish line.")]
-    public GameObject triggerCube;
-    [Tooltip("How far in front of the bike the trigger should be placed upon spawning.")]
-    public float triggerZOffset = 6.0f;
+    [Header("Start and End Triggers")]
+    public GameObject startTriggerObject;
+    public GameObject finishTriggerObject;
 
     [Header("State Tracking")]
-    public int currentLap = 0;
     private bool studyStarted = false;
     private bool studyFinished = false;
 
     public enum Spawnpoint { Spawnpoint_0 = 0, Spawnpoint_1 = 1, Spawnpoint_2 = 2 }
 
-    [Tooltip("Select which knot on the spline the bike starts at.")]
-    public Spawnpoint selectedSpawnpoint = Spawnpoint.Spawnpoint_0;
-    public GameObject course;
     public GameObject bike;
+    public SplineContainer splineContainer;
 
     private Rigidbody bikeRigidbody;
-    private SplineContainer splineContainer;
+    
     private SplineSpawnpointData spawnpointData;
 
     private SentSerialController sentSerial;
 
-    private float lastTriggerTime = 0f;
-    private float triggerCooldown = 5.0f; // seconds to wait between triggers to avoid double-counting
-
     /// <summary>
-    /// prepares the scene, finds hardware controllers, and spawns the bike.
+    /// Prepares the scene, identifies direction based on condition, and spawns objects.
     /// </summary>
     void Start() {
-        // hide completion text at the start
-        if (endStudyText != null) endStudyText.gameObject.SetActive(false);
+        if (endStudyText != null) {
+            endStudyText.gameObject.SetActive(false);
+        }
 
-        // find hardware communication scripts
         if (sentSerial == null) sentSerial = FindObjectOfType<SentSerialController>();
+
+        // sets the class-level boolean based on the enum integer flag
+        reverseDirection = ((int)currentCondition == 1);
 
         InitializeAndCheckSpawnVariables();
         SpawnBike();
+        SpawnStartAndFinishTriggers();
     }
 
     /// <summary>
-    /// logic executed when the StudyTrigger script detects the bike.
-    /// handles study initialization on the first hit and lap counting thereafter.
+    /// Entry point for all trigger interactions.
     /// </summary>
-    public void OnBikePassedTrigger() {
+    public void OnTriggerHit(StudyTrigger.TriggerType type) {
         if (studyFinished) return;
 
-        if (studyStarted) {
-            if (Time.time - lastTriggerTime < triggerCooldown) {  // ignore hits that happen too quickly
-                return;
-            }
+        // Only start if we haven't started yet
+        if (type == StudyTrigger.TriggerType.StartLine && !studyStarted) {
+            StartStudy();
         }
+        // Only finish if we are currently mid-study
+        else if (type == StudyTrigger.TriggerType.FinishLine && studyStarted) {
+            FinishStudy();
+        }
+    }
+    
+    /// <summary>
+    /// Positions the bike at Index 0 (Forward) or Index 1 (Reverse) using direct position assignment.
+    /// </summary>
+    private void SpawnBike() {
+        int bikeIndex = reverseDirection ? 1 : 0;
 
-        lastTriggerTime = Time.time;
+        if (spawnpointData != null && spawnpointData.spawnpoints.Count > bikeIndex) {
+            int knotIndex = spawnpointData.spawnpoints[bikeIndex].knotIndex;
+            Spline selectedSpline = splineContainer[0];
 
-        if (!studyStarted) { // logic for the very first time the bike crosses the start line
-            studyStarted = true;
-            currentLap = 1;
+            // Direct calculation of world position and rotation
+            Vector3 startPos = splineContainer.transform.TransformPoint(selectedSpline[knotIndex].Position);
+            Quaternion baseRot = splineContainer.transform.rotation * selectedSpline[knotIndex].Rotation;
+            Quaternion startRot = reverseDirection ? baseRot * Quaternion.Euler(0, 180, 0) : baseRot;
 
-            if (dataLogger != null) {
-                dataLogger.StartLogger();
-            }
-            Debug.Log("<color=green>Study Started. Logger initialized.</color>");
-        } else { // logic for subsequent laps
-            currentLap++;
-            Debug.Log($"<color=white><b>Lap {currentLap}</b> recorded.</color>");
+            bikeRigidbody.position = startPos;
+            bikeRigidbody.rotation = startRot;
 
-            if (currentLap > totalRoundsToComplete) {
-                FinishStudy();
-            }
+            bikeRigidbody.WakeUp();
+            Physics.SyncTransforms();
         }
     }
 
     /// <summary>
-    /// cleans up the study session, stops data logging, and disables hardware for safety.
+    /// Positions the triggers at Index 2 and 3. 
+    /// Swaps their roles (Start vs Finish) if reverseDirection is true.
+    /// </summary>
+    private void SpawnStartAndFinishTriggers() {
+        if (spawnpointData == null || spawnpointData.spawnpoints.Count < 4) {
+            Debug.LogError("SplineSpawnpointData requires 4 points: [0]BikeF, [1]BikeR, [2]PointA, [3]PointB");
+            return;
+        }
+
+        // Map indices: 2 is normally start, 3 is normally finish.
+        int startKnotIdx = reverseDirection ? 3 : 2;
+        int finishKnotIdx = reverseDirection ? 2 : 3;
+
+        Spline spline = splineContainer[0];
+
+        // Position Start Trigger (Direct Assignment)
+        int sKnot = spawnpointData.spawnpoints[startKnotIdx].knotIndex;
+        Vector3 sPos = splineContainer.transform.TransformPoint(spline[sKnot].Position);
+        Quaternion sRot = splineContainer.transform.rotation * spline[sKnot].Rotation;
+        if (reverseDirection) sRot *= Quaternion.Euler(0, 180, 0);
+
+        startTriggerObject.transform.position = sPos;
+        startTriggerObject.transform.rotation = sRot;
+        startTriggerObject.GetComponent<StudyTrigger>().type = StudyTrigger.TriggerType.StartLine;
+
+        // Position Finish Trigger (Direct Assignment)
+        int fKnot = spawnpointData.spawnpoints[finishKnotIdx].knotIndex;
+        Vector3 fPos = splineContainer.transform.TransformPoint(spline[fKnot].Position);
+        Quaternion fRot = splineContainer.transform.rotation * spline[fKnot].Rotation;
+        if (reverseDirection) fRot *= Quaternion.Euler(0, 180, 0);
+
+        finishTriggerObject.transform.position = fPos;
+        finishTriggerObject.transform.rotation = fRot;
+        finishTriggerObject.GetComponent<StudyTrigger>().type = StudyTrigger.TriggerType.FinishLine;
+
+        Physics.SyncTransforms();
+    }
+
+    /// <summary>
+    /// Begins the study recording.
+    /// </summary>
+    private void StartStudy() {
+        if (studyFinished || studyStarted) return;
+
+        studyStarted = true;
+        if (dataLogger != null) dataLogger.StartLogger();
+    }
+
+    /// <summary>
+    /// Ends the study and secures hardware.
     /// </summary>
     private void FinishStudy() {
+        if (studyFinished) return;
+
         studyFinished = true;
 
-        // stop the logger immediately to ensure data integrity
         if (dataLogger != null) dataLogger.StopLogger();
 
-        // show the completion message to the participant
         if (endStudyText != null) {
-            endStudyText.text = "<size=2><color=#00FFFF>Round Completed!</color></size>\n" +
+            endStudyText.text = "<size=1.5><color=#00FFFF>Round Completed!</color></size>\n" +
                                 "<size=1><color=white>You may now remove the headset.</color></size>";
             endStudyText.gameObject.SetActive(true);
         }
 
-        
-        // hardware safety: tell serial controllers to kill power to motors
         if (sentSerial != null) {
             sentSerial.ShutdownSerial();
-        } else {
-            Debug.LogWarning("FinishStudy: SentSerialController not found. Hardware may still be active!");
-        }
-    }
-
-    /// <summary>
-    /// positions the bike on the track based on spline data and selected spawnpoint.
-    /// </summary>
-    private void SpawnBike() {
-        int spawnpointIndex = (int)selectedSpawnpoint;
-        Spline selectedSpline = splineContainer[0];
-
-        // get the specific knot (point on path) for spawning
-        int knotIndex = spawnpointData.spawnpoints[spawnpointIndex].knotIndex;
-        BezierKnot[] knotArray = selectedSpline.ToArray();
-
-        // convert local spline position to world position
-        Vector3 startPos = splineContainer.transform.TransformPoint(knotArray[knotIndex].Position);
-
-        // calculate rotation and handle the reverse direction toggle
-        Quaternion baseRot = splineContainer.transform.rotation * knotArray[knotIndex].Rotation;
-        Quaternion startRot = reverseDirection ? baseRot * Quaternion.Euler(0, 180, 0) : baseRot;
-
-        // apply to physics engine
-        bikeRigidbody.position = startPos;
-        bikeRigidbody.rotation = startRot;
-
-        // force physics to update immediately to prevent "ghost" collisions
-        bikeRigidbody.WakeUp();
-        Physics.SyncTransforms();
-
-        // place the start/finish trigger slightly ahead of the bike
-        if (triggerCube != null) {
-            triggerCube.transform.position = startPos + (startRot * Vector3.forward * triggerZOffset);
-            triggerCube.transform.rotation = startRot;
         }
     }
 
     /// <summary>
     /// caches components from the assigned course and bike objects.
     /// </summary>
+    /// 
     private void InitializeAndCheckSpawnVariables() {
         bikeRigidbody = bike.GetComponent<Rigidbody>();
-        splineContainer = course.GetComponentInChildren<SplineContainer>();
-        spawnpointData = course.GetComponentInChildren<SplineSpawnpointData>();
+        spawnpointData = splineContainer.GetComponent<SplineSpawnpointData>();
     }
 }

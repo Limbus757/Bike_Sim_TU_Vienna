@@ -7,10 +7,17 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider {
     [Tooltip("The VR Controller GameObject used to capture steering input.")]
     public GameObject leftController;
 
-    [Tooltip("The VR Controller used for the calibration button press.")]
-    public GameObject rightController;
-
     public float SteeringAngle { get; private set; } = 0.0f;
+
+    [Header("Filtering Settings")]
+    [Tooltip("Enable to smooth out VR jitter. Disable for raw input.")]
+    public bool useSteeringFiltering = true;
+
+    [Range(0.01f, 1.0f)]
+    [Tooltip("Lower = smoother (less buzz), Higher = more responsive (less lag).")]
+    public float steeringSmoothing = 0.8f;
+
+    private float rawSteeringAngle = 0.0f;
 
     private bool steeringInitialized = false;
     private float steeringZeroYaw = 0f;
@@ -34,7 +41,7 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider {
         Invoke(nameof(RecalibrateSteering), 1.0f);
     }
 
-    void Update() {
+    void FixedUpdate() {
         // Calibration check
         if (Input.GetKeyDown(KeyCode.Space) || OVRInput.GetDown(OVRInput.Button.Two)) {
             RecalibrateSteering();
@@ -76,11 +83,18 @@ public class SimulatorInputProvider : MonoBehaviour, IBikeInputProvider {
             // 2. Calculate the controller's yaw relative to the bike's current heading
             float relativeYaw = Mathf.DeltaAngle(bikeWorldYaw, currentWorldYaw);
 
-            // 3. Subtract the calibration offset to find the actual steering input
+            // 3. Calculate the raw delta (Target)
             float deltaYaw = Mathf.DeltaAngle(steeringZeroYaw, relativeYaw);
+            rawSteeringAngle = Mathf.Clamp(deltaYaw, -50f, 50f);
 
-            // 4. Clamp to your +/- 50 degree limits
-            SteeringAngle = Mathf.Clamp(deltaYaw, -50f, 50f);
+            // 4. Toggleable Low-Pass Filter
+            if (useSteeringFiltering) {
+                // Smoothly approach the raw target
+                SteeringAngle = Mathf.Lerp(SteeringAngle, rawSteeringAngle, steeringSmoothing);
+            } else {
+                // Direct assignment (Raw)
+                SteeringAngle = rawSteeringAngle;
+            }
         }
     }
 }

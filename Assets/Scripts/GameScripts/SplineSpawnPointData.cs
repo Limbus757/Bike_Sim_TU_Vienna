@@ -20,6 +20,14 @@ public class SplineSpawnpointData : MonoBehaviour {
         public int knotIndex;
     }
 
+    /// <summary>
+    /// INDEX MAP:
+    /// [0] = Bike Spawn (Forward)
+    /// [1] = Bike Spawn (Reverse)
+    /// [2] = Start Line Knot
+    /// [3] = Finish Line Knot
+    /// 
+    /// When Reverse is true, Trigger 2 becomes the Finish and Trigger 3 becomes the Start.
     [Tooltip("A list of all spawn points for this course. You can edit this list in the Inspector.")]
     public List<SpawnpointData> spawnpoints = new List<SpawnpointData>();
 }
