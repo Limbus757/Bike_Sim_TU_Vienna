@@ -10,14 +10,14 @@ public class LKAConfiguration : MonoBehaviour {
     public MLClosedSplineFrenet frenet;
 
     [Header("Lane Geometry")]
-    public float trackWidthMeters = 4.0f; // Total width from left to right curb
+    public float trackWidthMeters = 2.5f; // Total width from left to right curb
 
     [Header("LKA Settings")]
     [Range(0f, 1f)]
-    public float lkaDeadZonePercentage = 0.35f; // Inner area where LKA stays idle (eg. 0.4 = 40% of half-width)
+    public float lkaDeadZonePercentage = 0.4f; // Inner area where LKA stays idle (eg. 0.4 = 40% of half-width)
 
     [Tooltip("The minimum speed for the lanekeeping to activate.")]
-    public float minSpeedToEngage = 8f; // speed threshold for safety
+    public float minSpeedToEngage = 5f; // speed threshold for safety
 
     [Tooltip("How much further past the deadzone to ENGAGE.")]
     public float engageBuffer = 0f; // extra distance required to trigger LKA
@@ -29,8 +29,8 @@ public class LKAConfiguration : MonoBehaviour {
 
     [Header("Haptics Settings")]
     public HapticsMode mode = HapticsMode.ADAPTIVE;
-    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.15f; // Haptics usually trigger before steering
-    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.35f;   // Max vibration intensity reach
+    [Range(0f, 1f)] public float hapticsDeadZonePercentage = 0.2f; // Haptics usually trigger before steering
+    [Range(0f, 1f)] public float hapticsMaxVibPercentage = 0.4f;   // Max vibration intensity reach
 
     [Header("Calculated Hardware PWM Limits")]
     public int SteeringPwmMinLimit;     // Calculated 10% safety floor

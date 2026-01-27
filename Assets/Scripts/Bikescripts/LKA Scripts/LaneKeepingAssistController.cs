@@ -24,8 +24,8 @@ public class LaneKeepingAssistController : MonoBehaviour {
     public int SteeringMotorPWM = 0;
 
     [Header("PID Gains")]
-    public float Kp = 0.8f;
-    public float Ki = 0.005f;
+    public float Kp = 0.5f;
+    public float Ki = 0.006f;
     public float Kd = 0.2f;
     [Range(0.01f, 1f)] public float derivativeSmoothing = 0.1f;
 

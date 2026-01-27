@@ -10,14 +10,15 @@ public class GameController : MonoBehaviour {
 
     public enum StudyConditions {
         // CW = 0 (Forward)
-        BaselineCW = 0,
-        HapticsFixedCW = 0,
-        HapticsAdaptiveCW = 0,
+        Training,
+        BaselineCW,
+        HapticsFixedCW,
+        HapticsAdaptiveCW,
 
         // CC = 1 (Reverse)
-        BaselineCC = 1,
-        HapticsFixedCC = 1,
-        HapticsAdaptiveCC = 1
+        BaselineCC,
+        HapticsFixedCC,
+        HapticsAdaptiveCC
     }
 
     [Header("Study Parameters")]
@@ -66,7 +67,17 @@ public class GameController : MonoBehaviour {
         if (sentSerial == null) sentSerial = FindObjectOfType<SentSerialController>();
 
         // sets the class-level boolean based on the enum integer flag
-        reverseDirection = ((int)currentCondition == 1);
+        switch (currentCondition) {
+            case StudyConditions.BaselineCC:
+            case StudyConditions.HapticsFixedCC:
+            case StudyConditions.HapticsAdaptiveCC:
+                reverseDirection = true;
+                break;
+
+            default: // Training + all CW conditions
+                reverseDirection = false;
+                break;
+        }
 
         InitializeAndCheckSpawnVariables();
         SpawnBike();

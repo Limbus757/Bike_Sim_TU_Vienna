@@ -41,6 +41,7 @@ public class DataLogger : MonoBehaviour {
         public float Haptic_L_Norm;
         public float Haptic_R_Norm;
         public float LkaNormEffort;
+        public float LkaNormCTE;
         public float LkaPIDError;
         public float CTE_Meters;
         public float B_HeadingError_Deg;
@@ -69,6 +70,7 @@ public class DataLogger : MonoBehaviour {
     "Haptic_R_Norm",
     "LkaPIDError",
     "LkaNormEffort",
+    "LkaNormCTE",
     "CTE_Meters",
     "B_HeadingError_Deg",
     "W_HeadingError_Deg",
@@ -108,7 +110,6 @@ public class DataLogger : MonoBehaviour {
             this.enabled = false;
             return;
         }
-
         PrepareDirectoryAndFile();
     }
 
@@ -146,12 +147,20 @@ public class DataLogger : MonoBehaviour {
             if (!Directory.Exists(folderPath)) Directory.CreateDirectory(folderPath);
 
             string pId = game.studyParticipantId.ToString();
-            string cond = game.currentCondition.ToString();
+            GameController.StudyConditions tmpcond = game.currentCondition;
+            Debug.Log($"Logger condition at file creation: {game.currentCondition}");
+            string cond = tmpcond.ToString();
             string timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss");
             string filePath = Path.Combine(folderPath, $"{pId}_{cond}_{timestamp}.csv");
+            string Roadwidth = lkaConfig.RoadHalfWidthMeters.ToString();
+            string LKA_DZ = lkaConfig.lkaDeadZonePercentage.ToString();
+            string Min_V_P = lkaConfig.hapticsDeadZonePercentage.ToString();
+            string Max_V_P = lkaConfig.hapticsMaxVibPercentage.ToString();
+
+
 
             sw = new StreamWriter(filePath, false) { AutoFlush = false };
-            sw.WriteLine($"# Study: {studyName} | Participant: {pId} | Condition: {cond} | Init: {timestamp}");
+            sw.WriteLine($"# Study: {studyName} | Participant: {pId} | Condition: {cond} | Init: {timestamp} | Roadwidth_halfmeters: {Roadwidth} | LKA_deadzone: {LKA_DZ} | Min_Vib_Pecentage: {Min_V_P} | Max_Vib_Percentage: {Max_V_P}");
             sw.WriteLine(string.Join(DELIMITER, CsvHeaders));
 
             Debug.Log($"<color=cyan><b>Logger:</b> File created at {filePath}</color>");
@@ -163,7 +172,9 @@ public class DataLogger : MonoBehaviour {
     public void StartLogger() {
         if (isLogging || sw == null) return;
         isLogging = true;
+
         Task.Run(ProcessQueue);
+
         Debug.Log("<color=green><b>Logging Started</b></color>");
     }
 
@@ -187,6 +198,7 @@ public class DataLogger : MonoBehaviour {
             d.Haptic_L_Norm.ToString("F4", _formatProvider) + DELIMITER +
             d.Haptic_R_Norm.ToString("F4", _formatProvider) + DELIMITER +
             d.LkaNormEffort.ToString("F4", _formatProvider) + DELIMITER +
+            d.LkaNormCTE.ToString("F4", _formatProvider) + DELIMITER +
             d.LkaPIDError.ToString("F4", _formatProvider) + DELIMITER +
             d.CTE_Meters.ToString("F4", _formatProvider) + DELIMITER +
             d.B_HeadingError_Deg.ToString("F2", _formatProvider) + DELIMITER +
@@ -221,6 +233,7 @@ public class DataLogger : MonoBehaviour {
             Haptic_R_Norm = haptics.normalizedRightVibration,
             LkaPIDError = lka.CurrentError,
             LkaNormEffort = lka.CurrentEffort,
+            LkaNormCTE = lkaConfig.lkaCrossTrackErrorNormalized,
             CTE_Meters = frenet.crossTrackErrorMeters,
             B_HeadingError_Deg = frenet.bikeHeadingErrorDegrees,
             W_HeadingError_Deg = frenet.wheelHeadingErrorDegrees,
