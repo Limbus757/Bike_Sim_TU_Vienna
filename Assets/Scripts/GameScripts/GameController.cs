@@ -42,7 +42,7 @@ public class GameController : MonoBehaviour {
     public GameObject finishTriggerObject;
 
     [Header("State Tracking")]
-    private bool studyStarted = false;
+    public bool studyStarted = false;
     private bool studyFinished = false;
 
     public enum Spawnpoint { Spawnpoint_0 = 0, Spawnpoint_1 = 1, Spawnpoint_2 = 2 }
