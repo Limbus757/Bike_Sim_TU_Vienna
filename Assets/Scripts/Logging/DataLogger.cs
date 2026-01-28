@@ -53,6 +53,7 @@ public class DataLogger : MonoBehaviour {
         public int LKA_Switch;
         public int MotorDir;
         public int SecTaskNum;
+        public int SecTaskisTarget;
         public int SecTaskPressed;
         public int MotorPWM;
         public int HapticLeftPWM;
@@ -81,6 +82,7 @@ public class DataLogger : MonoBehaviour {
     "LKA_Switch",
     "MotorDir",
     "SecTaskNum",
+    "SecTaskIsTarget",
     "SecTaskPressed",
     "MotorPWM",
     "HapticLeftPWM",
@@ -210,6 +212,7 @@ public class DataLogger : MonoBehaviour {
             d.LKA_Switch + DELIMITER +
             d.MotorDir + DELIMITER +
             d.SecTaskNum + DELIMITER +
+            d.SecTaskisTarget + DELIMITER +
             d.SecTaskPressed + DELIMITER +
             d.MotorPWM + DELIMITER +
             d.HapticLeftPWM + DELIMITER +
@@ -244,6 +247,7 @@ public class DataLogger : MonoBehaviour {
             LKA_Switch = lka.lkaSwitchActive ? 1 : 0,
             MotorDir = lka.SteeringMotorDirection ? 1 : 0,
             SecTaskNum = secondaryTask.currentNumber,
+            SecTaskisTarget = secondaryTask.isTarget ? 1 : 0,
             SecTaskPressed = secondaryTask.buttonPressed ? 1 : 0,
             MotorPWM = lka.SteeringMotorPWM,
             HapticLeftPWM = haptics.pwmLeft,
