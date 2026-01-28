@@ -9,6 +9,9 @@ public class LKAConfiguration : MonoBehaviour {
     [Header("Frenet Source")]
     public MLClosedSplineFrenet frenet;
 
+    [Header("Condtion Source")]
+    public GameController gameController;
+
     [Header("Lane Geometry")]
     public float trackWidthMeters = 2.5f; // Total width from left to right curb
 
@@ -62,20 +65,21 @@ public class LKAConfiguration : MonoBehaviour {
     private const float steeringMaxPwmPercent = 0.90f;
 
     private void Awake() {
+        if (gameController == null) gameController = FindObjectOfType<GameController>();
         if (frenet == null) frenet = FindObjectOfType<MLClosedSplineFrenet>();
         UpdateBitRanges();
     }
+
+    private void Start() {
+        UpdateHapticsMode();
+    }
+
+
 
     private void OnValidate() {
         UpdateBitRanges();
     }
 
-    // Converts percentage safety limits into raw integer bits for the hardware controllers
-    private void UpdateBitRanges() {
-        SteeringPwmMinLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMinPwmPercent);
-        SteeringPwmMaxLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMaxPwmPercent);
-        VibrationPwmIdleValue = Mathf.RoundToInt(VibrationPWMRange * 0.50f);
-    }
 
     private void FixedUpdate() {
         if (frenet == null) return;
@@ -104,6 +108,32 @@ public class LKAConfiguration : MonoBehaviour {
             lkaCrossTrackErrorNormalized = Mathf.Clamp01(remapped) * Mathf.Sign(crossTrackErrorNormalized);
         } else {
             lkaCrossTrackErrorNormalized = 0f;
+        }
+    }
+
+
+    // Converts percentage safety limits into raw integer bits for the hardware controllers
+    private void UpdateBitRanges() {
+        SteeringPwmMinLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMinPwmPercent);
+        SteeringPwmMaxLimit = Mathf.RoundToInt(SteeringPWMRange * steeringMaxPwmPercent);
+        VibrationPwmIdleValue = Mathf.RoundToInt(VibrationPWMRange * 0.50f);
+    }
+
+    private void UpdateHapticsMode() {
+        switch (gameController.currentCondition) {
+            case GameController.StudyConditions.BaselineCC:
+            case GameController.StudyConditions.BaselineCW:
+                mode = HapticsMode.OFF;
+                break;
+            case GameController.StudyConditions.HapticsFixedCC:
+            case GameController.StudyConditions.HapticsFixedCW:
+            case GameController.StudyConditions.Training:
+                mode = HapticsMode.FIXED;
+                break;
+            case GameController.StudyConditions.HapticsAdaptiveCC:
+            case GameController.StudyConditions.HapticsAdaptiveCW:
+                mode = HapticsMode.ADAPTIVE;
+                break;
         }
     }
 }
