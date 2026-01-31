@@ -952,9 +952,9 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0c33f076d01e7c14895bc37e271eb332, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  studyName: Tests
-  studyParticipantId: 14
-  currentCondition: 1
+  studyName: LKA_Haptics
+  studyParticipantId: 15
+  currentCondition: 0
   dataLogger: {fileID: 880703809}
   endStudyText: {fileID: 323778607}
   reverseDirection: 0
