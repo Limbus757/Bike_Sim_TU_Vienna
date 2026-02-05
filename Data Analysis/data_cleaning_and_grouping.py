@@ -4,8 +4,8 @@ import os
 import re
 
 # File paths
-input_folder = 'data_input'
-output_base_folder = 'processed_output'
+input_folder = '_data_input'
+output_base_folder = 'cleaned_grouped_output'
 
 output_subdirectories = {
     "normalized": os.path.join(output_base_folder, "1_Normalized_Originals"),
