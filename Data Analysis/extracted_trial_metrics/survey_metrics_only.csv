@@ -1,0 +1,82 @@
+Participant ID,Trial.No,Trust_Score,TAM_PU,TAM_PEOU,TAM_Total,Specify what gender you identify with,How old are you?,  How often do you ride a bicycle?  ,How confident are you in your cycling skills?,  Have you used VR systems or simulators before?  ,"  If yes, how often do you use VR or simulators?  ",How familiar are you with VR or simulation environments?  
+1,1,3.8333333333333335,1.0,4.6,2.8,Male,23,Several times per week,6,Yes,Rarely,2
+1,2,3.3333333333333335,4.0,4.0,4.0,Male,23,Several times per week,6,Yes,Rarely,2
+1,3,3.3333333333333335,4.0,4.0,4.0,Male,23,Several times per week,6,Yes,Rarely,2
+3,1,4.5,5.2,6.0,5.6,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+3,2,3.8333333333333335,6.0,6.4,6.2,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+3,3,3.0833333333333335,2.4,3.0,2.7,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+3,4,3.9166666666666665,5.8,6.0,5.9,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+3,5,4.5,6.0,6.4,6.2,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+3,6,4.25,4.0,6.4,5.2,Male,22,Several times per month,5,Yes,Occasionally (monthly),5
+4,1,3.5833333333333335,1.4,4.2,2.8,Male,24,Rarely,7,No,Rarely,1
+4,2,3.5833333333333335,3.4,5.0,4.2,Male,24,Rarely,7,No,Rarely,1
+4,3,4.0,4.0,5.0,4.5,Male,24,Rarely,7,No,Rarely,1
+4,4,3.9166666666666665,3.6,5.4,4.5,Male,24,Rarely,7,No,Rarely,1
+5,1,3.5,5.8,5.4,5.6,Female,27,Rarely,3,Yes,Rarely,3
+5,2,2.9166666666666665,4.8,4.2,4.5,Female,27,Rarely,3,Yes,Rarely,3
+5,3,2.8333333333333335,5.2,5.0,5.1,Female,27,Rarely,3,Yes,Rarely,3
+5,4,2.6666666666666665,4.4,4.8,4.6,Female,27,Rarely,3,Yes,Rarely,3
+5,5,3.0,4.6,5.0,4.8,Female,27,Rarely,3,Yes,Rarely,3
+5,6,3.3333333333333335,6.0,6.0,6.0,Female,27,Rarely,3,Yes,Rarely,3
+6,1,4.666666666666667,3.8,4.8,4.3,Male,23,Rarely,5,Yes,Rarely,2
+6,2,2.0833333333333335,1.0,1.0,1.0,Male,23,Rarely,5,Yes,Rarely,2
+6,3,3.9166666666666665,4.2,5.8,5.0,Male,23,Rarely,5,Yes,Rarely,2
+6,4,3.3333333333333335,3.6,5.6,4.6,Male,23,Rarely,5,Yes,Rarely,2
+6,5,2.75,3.0,4.6,3.8,Male,23,Rarely,5,Yes,Rarely,2
+6,6,3.75,3.8,5.0,4.4,Male,23,Rarely,5,Yes,Rarely,2
+7,1,3.1666666666666665,2.8,5.6,4.2,Female,21,Rarely,6,Yes,Rarely,2
+7,2,2.75,2.8,5.0,3.9,Female,21,Rarely,6,Yes,Rarely,2
+7,3,2.0,1.8,3.4,2.6,Female,21,Rarely,6,Yes,Rarely,2
+7,4,1.8333333333333333,1.6,3.0,2.3,Female,21,Rarely,6,Yes,Rarely,2
+7,5,2.0833333333333335,1.8,3.6,2.7,Female,21,Rarely,6,Yes,Rarely,2
+7,6,2.8333333333333335,1.4,2.8,2.1,Female,21,Rarely,6,Yes,Rarely,2
+8,1,2.25,4.0,3.4,3.7,Male,20,Several times per week,6,No,This is my first time,3
+8,2,3.9166666666666665,1.4,3.0,2.2,Male,20,Several times per week,6,No,This is my first time,3
+8,3,2.5833333333333335,1.6,1.6,1.6,Male,20,Several times per week,6,No,This is my first time,3
+8,4,4.833333333333333,2.8,4.0,3.4,Male,20,Several times per week,6,No,This is my first time,3
+8,5,4.5,1.8,6.4,4.1,Male,20,Several times per week,6,No,This is my first time,3
+8,6,4.333333333333333,1.6,6.0,3.8,Male,20,Several times per week,6,No,This is my first time,3
+9,1,4.333333333333333,5.6,6.0,5.8,Male,22,Several times per week,6,Yes,Rarely,2
+9,2,4.75,5.6,6.2,5.9,Male,22,Several times per week,6,Yes,Rarely,2
+9,3,4.833333333333333,5.8,6.6,6.2,Male,22,Several times per week,6,Yes,Rarely,2
+9,4,4.583333333333333,6.2,6.8,6.5,Male,22,Several times per week,6,Yes,Rarely,2
+9,5,4.916666666666667,6.2,6.4,6.3,Male,22,Several times per week,6,Yes,Rarely,2
+9,6,4.166666666666667,6.2,6.2,6.2,Male,22,Several times per week,6,Yes,Rarely,2
+10,1,3.25,2.8,3.6,3.2,Male,22,Several times per month,7,No,This is my first time,1
+10,2,3.75,3.2,6.4,4.8,Male,22,Several times per month,7,No,This is my first time,1
+10,3,4.416666666666667,2.0,4.6,3.3,Male,22,Several times per month,7,No,This is my first time,1
+10,4,2.0,1.4,4.8,3.1,Male,22,Several times per month,7,No,This is my first time,1
+10,5,3.8333333333333335,1.4,6.4,3.9,Male,22,Several times per month,7,No,This is my first time,1
+10,6,1.75,1.0,5.6,3.3,Male,22,Several times per month,7,No,This is my first time,1
+11,1,3.0833333333333335,2.2,4.8,3.5,Male,21,Several times per month,7,Yes,Rarely,3
+11,2,1.5833333333333333,2.2,5.8,4.0,Male,21,Several times per month,7,Yes,Rarely,3
+11,3,1.5,2.2,4.6,3.4,Male,21,Several times per month,7,Yes,Rarely,3
+11,4,2.8333333333333335,1.8,5.2,3.5,Male,21,Several times per month,7,Yes,Rarely,3
+11,5,1.8333333333333333,2.0,5.2,3.6,Male,21,Several times per month,7,Yes,Rarely,3
+11,6,2.4166666666666665,1.4,5.0,3.2,Male,21,Several times per month,7,Yes,Rarely,3
+12,1,4.416666666666667,3.0,5.4,4.2,Male,22,Rarely,6,No,This is my first time,1
+12,2,4.833333333333333,3.4,5.6,4.5,Male,22,Rarely,6,No,This is my first time,1
+12,3,4.583333333333333,3.6,6.0,4.8,Male,22,Rarely,6,No,This is my first time,1
+12,4,4.666666666666667,3.6,5.8,4.7,Male,22,Rarely,6,No,This is my first time,1
+12,5,4.583333333333333,3.6,5.8,4.7,Male,22,Rarely,6,No,This is my first time,1
+12,6,4.166666666666667,3.8,6.0,4.9,Male,22,Rarely,6,No,This is my first time,1
+13,1,4.75,5.0,6.6,5.8,Male,20,Several times per month,6,Yes,Rarely,4
+13,2,4.333333333333333,5.0,6.0,5.5,Male,20,Several times per month,6,Yes,Rarely,4
+13,3,4.583333333333333,4.8,6.4,5.6,Male,20,Several times per month,6,Yes,Rarely,4
+13,4,4.75,4.6,6.8,5.7,Male,20,Several times per month,6,Yes,Rarely,4
+13,5,4.5,4.4,6.8,5.6,Male,20,Several times per month,6,Yes,Rarely,4
+13,6,4.916666666666667,4.6,6.8,5.7,Male,20,Several times per month,6,Yes,Rarely,4
+14,1,2.4166666666666665,3.4,6.8,5.1,Male,23,Several times per week,7,No,This is my first time,2
+14,2,3.25,3.6,6.2,4.9,Male,23,Several times per week,7,No,This is my first time,2
+14,3,2.5,1.6,4.8,3.2,Male,23,Several times per week,7,No,This is my first time,2
+14,4,4.0,3.2,6.0,4.6,Male,23,Several times per week,7,No,This is my first time,2
+14,5,3.6666666666666665,3.8,6.0,4.9,Male,23,Several times per week,7,No,This is my first time,2
+14,6,3.5,3.0,6.0,4.5,Male,23,Several times per week,7,No,This is my first time,2
+15,1,2.5833333333333335,5.8,3.6,4.7,Male,26,Several times per month,6,Yes,Rarely,6
+15,2,2.6666666666666665,1.2,1.4,1.3,Male,26,Several times per month,6,Yes,Rarely,6
+16,1,3.75,3.0,6.2,4.6,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
+16,2,4.166666666666667,5.0,7.0,6.0,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
+16,3,4.666666666666667,6.6,6.8,6.7,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
+16,4,4.583333333333333,6.8,6.6,6.7,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
+16,5,4.333333333333333,7.0,6.8,6.9,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
+16,6,4.666666666666667,7.0,7.0,7.0,Male,22,Several times per month,6,Yes,Occasionally (monthly),7
