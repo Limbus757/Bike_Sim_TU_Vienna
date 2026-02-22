@@ -10,11 +10,11 @@ import pyarrow as pa
 import pyarrow.csv as pc
 
 # --- Configuration ---
-INPUT_DIRS = ['.', '_raw_data_input']
-OUTPUT_DIR = 'grouped_cleaned_output'
+INPUT_DIR = os.path.abspath(os.path.join(os.getcwd(), '..', '00_raw_trial_data'))
+OUTPUT_DIR = PARENT_DIR = os.path.abspath(os.path.join(os.getcwd(), '..', '01_grouped_cleaned_output'))
 OUTPUT_SUBDIR_GROUP = os.path.join(OUTPUT_DIR, 'grouped_by_condition')
 OUTPUT_SUBDIR_NORM = os.path.join(OUTPUT_DIR, '_normalized_laps')
-INCLUDE_COLUMNS = [0, 1, 2, 3, 5, 6, 8, 10, 11, 13, 14, 16, 17, 19, 20, 21]
+INCLUDE_COLUMNS = [0, 1, 2, 3, 5, 6, 8, 10, 11, 13, 14, 17, 19, 20, 21]
 
 # Requirements for integrity check
 REQ_FILES_PER_PID = 6
@@ -140,17 +140,19 @@ def main():
     
     # Discovery
     s_step = time.time()
-    files = []
-    for d in INPUT_DIRS:
-        if os.path.exists(d):
-            found = glob.glob(os.path.join(d, "*.csv"))
-            files.extend([f for f in found if os.path.basename(f)[0].isdigit() and "_" in f])
-    files = sorted(list(set(files)))
-    metrics['Discovery'] = time.time() - s_step
-
-    if not files:
-        print("No input files found.")
+    print(f"Searching in: {INPUT_DIR}")
+    
+    if not os.path.exists(INPUT_DIR):
+        print(f"Error: Path not found -> {INPUT_DIR}")
         return
+
+    # Get all CSVs in that specific path
+    found = glob.glob(os.path.join(INPUT_DIR, "*.csv"))
+    
+    # Filter: must have an underscore (matching your parts[0], parts[1] logic)
+    files = [f for f in found if "_" in os.path.basename(f)]
+    
+    metrics['Discovery'] = time.time() - s_step
 
     # Processing
     print(f"Reading {len(files)} files...")

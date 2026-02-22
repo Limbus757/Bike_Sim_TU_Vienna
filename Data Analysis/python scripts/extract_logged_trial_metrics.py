@@ -5,20 +5,24 @@ import os
 # ==========================================
 # FILE & DIRECTORY SETTINGS
 # ==========================================
-INPUT_DIR  = "../grouped_cleaned_output/grouped_by_condition"
-OUTPUT_DIR = "../extracted_trial_metrics"
-CONDITION_DIR = os.path.join(OUTPUT_DIR, "conditions")
-COMBINED_FILENAME = "logged_trial_metrics_combined.csv"
+PARENT_DIR = os.path.abspath(os.path.join(os.getcwd(), '..'))
+INPUT_DIR  = os.path.join(PARENT_DIR, "01_grouped_cleaned_output", "grouped_by_condition")
+OUTPUT_DIR = os.path.join(PARENT_DIR, "02_extracted_trial_metrics")
+
+COMBINED_FILENAME = "logged_trial_metrics.csv"
 CONDITION_ORDER = ['Baseline', 'HapticsFixed', 'HapticsAdaptive']
 
 DATA_CONFIG = {
-    'Baseline': {'in': 'Baseline.csv', 'out': 'logged_baseline_metrics.csv'},
-    'HapticsFixed': {'in': 'HapticsFixed.csv', 'out': 'logged_haptics_fixed_metrics.csv'},
-    'HapticsAdaptive': {'in': 'HapticsAdaptive.csv', 'out': 'logged_haptics_adaptive_metrics.csv'}
+    'Baseline': {'in': 'Baseline.csv'},
+    'HapticsFixed': {'in': 'HapticsFixed.csv'},
+    'HapticsAdaptive': {'in': 'HapticsAdaptive.csv'}
 }
 
+# ==========================================
+# SECONDARY TASK PERFORMANCE (n-Back)
+# ==========================================
+
 def calculate_secondary_task_performance(trial_data, response_window=1.5):
-    """Calculates n-Back performance with Stimulus-based Debounce."""
     trial_data = trial_data.sort_values('Timestamp').copy()
     for col in ['SecTaskNum', 'SecTaskIsTarget', 'SecTaskPressed']:
         if col in trial_data.columns:
@@ -36,26 +40,39 @@ def calculate_secondary_task_performance(trial_data, response_window=1.5):
     if len(pressed) > 0 and pressed[0] == 1: press_onsets_mask[0] = True
     
     press_times = trial_data[press_onsets_mask].drop_duplicates(subset=['stim_block'])['Timestamp'].values
-    hits, reaction_times, used_press_indices = 0, [], set()
+    hits, reaction_times, individual_speeds, used_press_indices = 0, [], [], set()
+    
     for t_start in target_times:
         t_end = t_start + response_window
         for i, p_time in enumerate(press_times):
             if i not in used_press_indices and t_start <= p_time <= t_end:
                 hits += 1
-                reaction_times.append(p_time - t_start)
+                rt = p_time - t_start
+                reaction_times.append(rt)
+                individual_speeds.append(1.0 / rt)
                 used_press_indices.add(i)
                 break
 
-    num_targets, num_distractors = len(target_times), len(distractor_times)
+    num_targets = len(target_times)
+    num_distractors = len(distractor_times)
+    
+    # hit rate as percentage of targets identified
     hit_rate = (hits / num_targets * 100) if num_targets > 0 else 0
     fa_count = len(press_times) - len(used_press_indices)
+    # false alarm rate based on distractor responses
     fa_rate = (fa_count / num_distractors * 100) if num_distractors > 0 else 0
-    
+    # corrected accuracy subtracting false alarms from hits
+    # reaction time average with penalty for misses
+    rt_penalized = np.mean(reaction_times) if reaction_times else response_window
+    # processing speed as average of inverse reaction times
+    proc_speed = np.mean(individual_speeds) if individual_speeds else 0.0
+
     return {
         'nback_hitrate_pct': hit_rate,
         'nback_farate_pct': fa_rate,
         'nback_accuracy_corrected_pct': hit_rate - fa_rate,
-        'nback_reactiontime_mean_seconds': np.mean(reaction_times) if reaction_times else np.nan
+        'nback_penalized_rt_seconds': rt_penalized,
+        'nback_processing_speed': proc_speed
     }
 
 # ==========================================
@@ -65,18 +82,25 @@ def calculate_secondary_task_performance(trial_data, response_window=1.5):
 def calculate_trial_metrics(trial_data, participant_id, trial_order, condition):
     if trial_data.empty: return None
     
-    # Ensure all required columns are numeric
     metric_cols = ['Timestamp', 'Speed_KmH', 'LkaNormEffort', 'LKA_Switch', 'IsOnStraight',
                    'TrackCurvature_1/Meters', 'Haptic_L_Norm', 'Haptic_R_Norm', 
-                   'CTE_Meters', 'B_HeadingError_Deg', 'SteerAngle', 'LKA_Engaged']
+                   'CTE_Meters', 'B_HeadingError_Deg', 'SteerAngle']
     
     for col in metric_cols:
         if col in trial_data.columns:
             trial_data[col] = pd.to_numeric(trial_data[col], errors='coerce')
 
+    # active torque detection
+    is_lka_active = trial_data['LkaNormEffort'].abs() > 0
+    # vibration activity detection
+    is_vibrating = (trial_data['Haptic_L_Norm'] > 0) | (trial_data['Haptic_R_Norm'] > 0)
+    is_switched_on = (trial_data['LKA_Switch'] == 1)
+    # edge region occupancy detection
+    is_in_edge = trial_data['CTE_Meters'].abs() > 0.5
+
     results = {'participant_id': participant_id, 'trial_order': trial_order, 'condition': condition}
 
-    # --- 1. TRACK SEGMENTATION LOGIC ---
+    # turn radius and segment classification
     trial_data['radius'] = np.where(trial_data['TrackCurvature_1/Meters'] != 0, 
                                     1 / trial_data['TrackCurvature_1/Meters'].abs(), np.nan)
     trial_data['segment_type'] = 'straight'
@@ -88,59 +112,56 @@ def calculate_trial_metrics(trial_data, participant_id, trial_order, condition):
         curve_mapping = trial_data[curves_mask].groupby('curve_id').apply(classify_curve, include_groups=False).to_dict()
         trial_data.loc[curves_mask, 'segment_type'] = trial_data.loc[curves_mask, 'curve_id'].map(curve_mapping)
 
-    # --- 2. OVERALL DRIVING PERFORMANCE ---
-    results['laptime_total_seconds'] = trial_data['Timestamp'].max() - trial_data['Timestamp'].min()
-    results['speed_mean_kmh'] = trial_data['Speed_KmH'].mean()
-    results['speed_sd_kmh'] = trial_data['Speed_KmH'].std()
+    # total duration of the trial
+    laptime = trial_data['Timestamp'].max() - trial_data['Timestamp'].min()
+    results['laptime_total_seconds'] = laptime
+    
+    # overall steering reversal count per minute
+    steer_diff = trial_data['SteerAngle'].diff().dropna()
+    reversals = ((steer_diff.shift(1) > 0) & (steer_diff < 0)) | ((steer_diff.shift(1) < 0) & (steer_diff > 0))
+    results['steering_reversal_rate'] = reversals.sum() / (laptime / 60) if laptime > 0 else 0
+    
+    # active duration of haptic vibrations
+    vibe_time = is_vibrating.sum() * (1/60)
+    # active duration of steering motor torque
+    lka_time = is_lka_active.sum() * (1/60)
+    
+    # reversal rate specifically during vibration warnings
+    results['srr_during_vibration'] = reversals[is_vibrating].sum() / vibe_time if vibe_time > 0 else 0
+    # reversal rate specifically during active lka torque
+    results['srr_during_lka'] = reversals[is_lka_active].sum() / lka_time if lka_time > 0 else 0
+
+    # absolute mean cross track error for overall trial
     results['cte_absmean_meters'] = trial_data['CTE_Meters'].abs().mean()
-    results['cte_sd_meters'] = trial_data['CTE_Meters'].std()
-    results['headingerror_absmean_deg'] = trial_data['B_HeadingError_Deg'].abs().mean()
-    results['headingerror_sd_deg'] = trial_data['B_HeadingError_Deg'].std()
-    results['steeringangle_sd_deg'] = trial_data['SteerAngle'].std()
-    
-    # --- 3. SYSTEM ENGAGEMENT (LKA & VIBRATION) ---
-    results['lka_switch_on_pct_overall'] = trial_data['LKA_Switch'].mean() * 100
-    
-    # CALCULATE OVERALL ACTIVATION (Un-categorized)
-    # This looks at the whole trial: "How often did LKA work when the switch was ON?"
-    switched_on = trial_data[trial_data['LKA_Switch'] == 1]
-    if not switched_on.empty:
-        results['lka_active_while_switched_on_pct_overall'] = switched_on['LKA_Engaged'].mean() * 100
-    else:
-        results['lka_active_while_switched_on_pct_overall'] = 0.0
+    # percentage of time spent outside lane center safety margin
+    results['pct_time_edge_region'] = is_in_edge.mean() * 100
 
-    lka_on = trial_data[trial_data['LKA_Engaged'] == 1]
-    results['lka_effort_absmean_overall'] = lka_on['LkaNormEffort'].abs().mean() if not lka_on.empty else 0.0
-    
     for seg in ['straight', 'short_turn', 'long_turn']:
-        seg_data = trial_data[trial_data['segment_type'] == seg]
+        seg_mask = (trial_data['segment_type'] == seg)
+        seg_data = trial_data[seg_mask]
+        
         if not seg_data.empty:
-            # Switch usage
-            results[f'switch_pct_{seg}'] = seg_data['LKA_Switch'].mean() * 100
+            seg_reversals = reversals[seg_mask]
+            seg_vibe = is_vibrating[seg_mask]
+            seg_lka = is_lka_active[seg_mask]
             
-            # YOUR NEW METRIC (Categorized)
-            sw_on_seg = seg_data[seg_data['LKA_Switch'] == 1]
-            results[f'lka_active_while_switched_on_pct_{seg}'] = sw_on_seg['LKA_Engaged'].mean() * 100 if not sw_on_seg.empty else 0.0
+            s_time = (seg_data['Timestamp'].max() - seg_data['Timestamp'].min()) / 60
+            sv_time = seg_vibe.sum() * (1/60)
+            sl_time = seg_lka.sum() * (1/60)
 
-            # LKA Effort in segment
-            seg_lka_on = seg_data[seg_data['LKA_Engaged'] == 1]
-            results[f'lka_effort_absmean_{seg}'] = seg_lka_on['LkaNormEffort'].abs().mean() if not seg_lka_on.empty else 0.0
-            
-            # Vibration
-            results[f'vibration_intensity_both_{seg}'] = (seg_data['Haptic_L_Norm'].abs() + seg_data['Haptic_R_Norm'].abs()).mean()
-            seg_vib_active = (seg_data['Haptic_L_Norm'] > 0) | (seg_data['Haptic_R_Norm'] > 0)
-            results[f'vibration_engaged_pct_{seg}'] = seg_vib_active.mean() * 100
-            
-            # Lateral performance
+            # segmented reversal rate for current track type
+            results[f'srr_{seg}'] = seg_reversals.sum() / s_time if s_time > 0 else 0
+            # segmented reversal rate during vibration on specific segment
+            results[f'srr_vibration_{seg}'] = seg_reversals[seg_vibe].sum() / sv_time if sv_time > 0 else 0
+            # segmented reversal rate during lka torque on specific segment
+            results[f'srr_lka_{seg}'] = seg_reversals[seg_lka].sum() / sl_time if sl_time > 0 else 0
+            # absolute cross track error for current segment
             results[f'cte_absmean_{seg}'] = seg_data['CTE_Meters'].abs().mean()
         else:
-            # If segment doesn't exist in this lap, mark as NaN
-            results[f'switch_pct_{seg}'] = np.nan
-            results[f'lka_active_while_switched_on_pct_{seg}'] = np.nan
-            results[f'lka_effort_absmean_{seg}'] = np.nan
-            results[f'cte_absmean_{seg}'] = np.nan
+            results[f'srr_{seg}'] = np.nan
+            results[f'srr_vibration_{seg}'] = np.nan
+            results[f'srr_lka_{seg}'] = np.nan
 
-    # --- 5. SECONDARY TASK ---
     results.update(calculate_secondary_task_performance(trial_data))
     return results
 
@@ -149,46 +170,28 @@ def calculate_trial_metrics(trial_data, participant_id, trial_order, condition):
 # ==========================================
 
 def main():
-    # Ensure both the main directory and the subdirectory exist
-    if not os.path.exists(CONDITION_DIR): 
-        os.makedirs(CONDITION_DIR)
-        
+    if not os.path.exists(OUTPUT_DIR): os.makedirs(OUTPUT_DIR)
     all_metrics = []
     
     for cond_key, files in DATA_CONFIG.items():
         file_path = os.path.join(INPUT_DIR, files['in'])
-        if not os.path.exists(file_path): 
-            print(f"Skipping {cond_key}: File not found.")
-            continue
+        if not os.path.exists(file_path): continue
             
         print(f"Processing {cond_key}...")
         raw_data = pd.read_csv(file_path, sep=';', decimal=',')
         
         grouped = raw_data.groupby(['participant_id', 'trial_order'])
-        condition_list = [calculate_trial_metrics(tg, pid, order, cond_key) 
-                          for (pid, order), tg in grouped]
-        
+        condition_list = [calculate_trial_metrics(tg, pid, order, cond_key) for (pid, order), tg in grouped]
         condition_list = [m for m in condition_list if m is not None]
         
         if condition_list:
-            cond_df = pd.DataFrame(condition_list).round(4)
-            
-            # Save to the 'conditions' subdirectory
-            individual_out_path = os.path.join(CONDITION_DIR, files['out'])
-            cond_df.to_csv(individual_out_path, index=False)
-            
-            all_metrics.append(cond_df)
+            all_metrics.append(pd.DataFrame(condition_list))
 
     if all_metrics:
         combined = pd.concat(all_metrics, ignore_index=True)
         combined['condition'] = pd.Categorical(combined['condition'], categories=CONDITION_ORDER, ordered=True)
-        
-        # Save combined file to the main output directory
-        combined_path = os.path.join(OUTPUT_DIR, COMBINED_FILENAME)
-        combined.to_csv(combined_path, index=False)
-        print(f"\nSuccess!")
-        print(f"Individual files: {CONDITION_DIR}")
-        print(f"Combined file: {combined_path}")
+        combined.round(4).to_csv(os.path.join(OUTPUT_DIR, COMBINED_FILENAME), index=False)
+        print(f"Success! Metrics saved to {OUTPUT_DIR}")
 
 if __name__ == "__main__":
     main()
