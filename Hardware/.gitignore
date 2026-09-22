@@ -1,0 +1,16 @@
+# Visual Studio / VS Code local configuration
+.vs/
+.vsconfig
+.vscode/
+*.sln
+*.csproj
+*.suo
+*.user
+
+# Arduino IDE / Compilation exports
+**/build/
+**/bin/
+**/sketch/
+*.elf
+*.hex
+*.bin
